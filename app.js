@@ -371,7 +371,7 @@ function viewAgenda() {
 
   let html = header('Agenda', sub, `<div class="head-btns">
     <button class="iconbtn sm" data-act="add" aria-label="Ajouter" title="Ajouter"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
-    <button class="iconbtn sm ${S.loading ? 'spin' : ''}" data-act="reload" aria-label="Actualiser" title="Actualiser">${ICON.refresh}</button></div>`);
+    <button class="iconbtn sm ${S.loading || Object.keys(S.syncing).length ? 'spin' : ''}" data-act="refresh-all" ${Object.keys(S.syncing).length ? 'disabled' : ''} aria-label="Synchroniser" title="Synchroniser les sources et l'agenda">${ICON.refresh}</button></div>`);
 
 
   if (allEvents().length || S.query) {
@@ -423,7 +423,6 @@ function viewSources() {
   html += `<div class="section-head"><div class="section-title">Calendriers liés${srcs.length ? ` <span class="count-pill">${srcs.length}</span>` : ''}</div>
     <div class="head-btns">
       <button class="iconbtn sm" data-act="add-source" aria-label="Ajouter un calendrier" title="Ajouter un calendrier"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
-      <button class="iconbtn sm ${busy ? 'spin' : ''}" data-act="sync-all" ${busy || !srcs.length ? 'disabled' : ''} aria-label="Synchroniser" title="Synchroniser">${ICON.refresh}</button>
     </div></div>`;
   if (!srcs.length) {
     html += `<div class="card"><button class="row" data-act="add-source"><div class="grow"><div class="name">Coller un lien de calendrier</div><div class="info">Sync2Cal, Google Agenda, club de sport, billetterie…</div></div>${ICON.chev}</button></div>`;
@@ -532,6 +531,12 @@ document.addEventListener('click', (e) => {
   if (t.dataset.src) { const s = S.config.sources.find((x) => x.id === t.dataset.src); if (s) openSourceForm(s); return; }
   const a = t.dataset.act;
   if (a === 'reload') load();
+  else if (a === 'refresh-all') {
+    // deux actions : relire l'agenda tout de suite, puis relire chaque calendrier lié (synchro GitHub)
+    load();
+    const ids = (S.config.sources || []).filter((x) => x.enabled !== false).map((x) => x.id);
+    if (ids.length) syncNow(ids);
+  }
   else if (a === 'sync-all') syncNow((S.config.sources || []).filter((s) => s.enabled !== false).map((s) => s.id));
   else if (a === 'sync-token') openSyncTokenSheet();
   else if (a === 'add-cat') openCatForm();
