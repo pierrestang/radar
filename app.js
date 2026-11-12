@@ -441,7 +441,6 @@ function viewSources() {
         <div class="grow"><div class="name">${esc(s.name)}</div><div class="info ${cls}">${esc(info)}</div></div>${ICON.chev}</button>`;
     }).join('')}</div>`;
   }
-  html += `<p class="note">Mis à jour toutes les ${SYNC_EVERY}.</p>`;
   return html;
 }
 
