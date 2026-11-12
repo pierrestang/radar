@@ -372,15 +372,15 @@ function viewSources() {
 function viewShare() {
   const url = S.icsUrl;
   const webcal = url ? url.replace(/^https:\/\//, 'webcal://') : '';
-  const gcal = url ? `https://calendar.google.com/calendar/u/0/r?cid=${encodeURIComponent(webcal)}` : '#';
   let html = header('Abonnement', 'Suivre Radar dans tes agendas');
   html += `<div class="section-title">Lien du calendrier fusionné</div>
     <div class="url-box" id="icsurl">${esc(url || 'Lien disponible après la première synchro…')}</div>
     <div class="btns" style="margin-top:0">
-      <a class="btn" href="${esc(gcal)}" target="_blank" rel="noopener">${ICON.google} Ajouter à Google Agenda</a>
+      <button class="btn" data-act="gcal" ${url ? '' : 'disabled'}>${ICON.google} Ajouter à Google Agenda</button>
       <a class="btn ghost" href="${esc(webcal)}">${ICON.apple} S'abonner sur cet iPhone</a>
       <button class="btn ghost" data-act="copy">${ICON.copy} Copier le lien</button>
     </div>
+    <p class="note"><b>Google Agenda</b> : le bouton copie le lien et ouvre la page « À partir de l'URL » de Google ; colle le lien puis clique sur « Ajouter un agenda ». À faire depuis un ordinateur (l'app Google Agenda pour iPhone ne permet pas d'ajouter un agenda par lien).</p>
     <p class="note">Si tu ajoutes Radar à Google Agenda, il apparaîtra aussi sur ton iPhone via ton compte Google : inutile de t'abonner deux fois. Google relit les agendas abonnés à son rythme (souvent quelques heures) ; l'iPhone peut être réglé dans Réglages › Calendrier › Comptes › Abonnements.</p>
     <p class="note">Garde ce lien pour toi : toute personne qui l'a peut voir ton agenda.</p>`;
 
@@ -457,14 +457,15 @@ document.addEventListener('click', (e) => {
   else if (a === 'add-source') openSourceForm();
   else if (a === 'add-manual') openEventForm();
   else if (a === 'copy') copyUrl();
+  else if (a === 'gcal') { const w = window.open('https://calendar.google.com/calendar/u/0/r/settings/addbyurl', '_blank', 'noopener'); copyUrl(true); if (!w) location.href = 'https://calendar.google.com/calendar/u/0/r/settings/addbyurl'; }
   else if (a === 'logout') logout();
 });
 $('#fab').onclick = () => (S.tab === 'sources' ? openSourceForm() : openAddMenu());
 $('#scrim').onclick = () => closeSheet();
 
-async function copyUrl() {
+async function copyUrl(forGoogle = false) {
   if (!S.icsUrl) return;
-  try { await navigator.clipboard.writeText(S.icsUrl); toast('Lien copié'); }
+  try { await navigator.clipboard.writeText(S.icsUrl); toast(forGoogle ? 'Lien copié : colle-le dans Google Agenda, puis « Ajouter un agenda »' : 'Lien copié', forGoogle ? 6000 : 2600); }
   catch { const r = document.createRange(); r.selectNodeContents($('#icsurl')); getSelection().removeAllRanges(); getSelection().addRange(r); toast('Lien sélectionné : copie-le'); }
 }
 function logout() {
