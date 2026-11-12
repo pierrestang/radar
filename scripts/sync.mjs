@@ -5,6 +5,10 @@ import ICAL from 'ical.js';
 import { readFileSync } from 'node:fs';
 import { parseICS, buildICS, normalizeUrl, emptyConfig, emptyRemote, googlePayload } from '../shared/ics.js';
 import { findGist, readGist, writeGist } from '../shared/gist.js';
+import { TV_PAGES, TV_REFRESH_MS, parseFootao, annotateTv } from '../shared/tv.js';
+import { MUSIC_SOURCE_ID, musicReleases } from '../shared/itunes.js';
+
+const UA = { 'User-Agent': 'Radar-calendar-sync/1.0' };
 
 const dry = process.argv.indexOf('--dry');
 if (dry > -1) {
@@ -47,6 +51,37 @@ for (const src of config.sources || []) {
     ko++;
     console.log(`✗ source ${src.id} : ${err.message || err}`);
   }
+}
+
+// Sorties musicales des artistes suivis (API iTunes, sans clé).
+if ((config.artists || []).length) {
+  const prev = remote.sources?.[MUSIC_SOURCE_ID];
+  const r = await musicReleases((u) => fetch(u, { headers: UA, signal: AbortSignal.timeout(20000) }), config.artists);
+  if (r.events.length || !prev) next.sources[MUSIC_SOURCE_ID] = { fetchedAt: new Date().toISOString(), calName: 'Sorties musique', error: r.error, events: r.events };
+  else next.sources[MUSIC_SOURCE_ID] = { ...prev, error: r.error, failedAt: new Date().toISOString() };
+  console.log(`${r.error ? '✗' : '✓'} sorties musique : ${r.events.length} sorties (${config.artists.length} artistes)`);
+}
+
+// Chaînes de diffusion des matchs (footao.tv) : relues toutes les 6 h seulement, puis rattachées aux matchs.
+next.tv = remote.tv || null;
+if (!next.tv || Date.now() - Date.parse(next.tv.fetchedAt || 0) > TV_REFRESH_MS) {
+  const items = [];
+  for (const url of TV_PAGES) {
+    try {
+      const res = await fetch(url, { headers: UA, signal: AbortSignal.timeout(20000) });
+      if (res.ok) items.push(...parseFootao(await res.text()));
+    } catch { /* page indisponible : on garde le reste */ }
+    await new Promise((r) => setTimeout(r, 1500)); // une page à la fois, sans insister
+  }
+  const seen = new Set();
+  const uniq = items.filter((it) => { const k = it.start + it.teams; if (seen.has(k)) return false; seen.add(k); return true; });
+  if (uniq.length) next.tv = { fetchedAt: new Date().toISOString(), items: uniq };
+  console.log(`📺 chaînes : ${uniq.length} matchs relevés`);
+}
+if (next.tv) {
+  let n = 0;
+  for (const s of Object.values(next.sources)) n += annotateTv(s.events || [], next.tv.items);
+  console.log(`📺 ${n} matchs avec leur chaîne`);
 }
 
 // Relire la config juste avant d'écrire, au cas où elle aurait changé pendant la synchro.

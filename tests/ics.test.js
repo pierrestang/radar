@@ -117,3 +117,41 @@ test('rubriques : défaut du calendrier, exception par événement, pas de sourc
   assert.ok(!ics.includes('via OM') && !ics.includes('CATEGORIES:OM'));
   assert.ok(ics.includes('CATEGORIES:Sport') && ics.includes('CATEGORIES:Film'));
 });
+
+import { parseFootao, annotateTv, channelName } from '../shared/tv.js';
+import { artistReleases } from '../shared/itunes.js';
+test('chaînes de diffusion (footao.tv) rattachées aux matchs', () => {
+  const html = `<div itemtype="https://schema.org/SportsEvent"><time itemprop="startDate" content="2026-11-12T20:45"></time>
+    <img src="x" alt="match TF1 foot programme soir"><span itemprop="name">Italie · France</span><a itemprop="url" href="#">x</a></div>
+    <div itemtype="https://schema.org/SportsEvent"><time itemprop="startDate" content="2026-11-22T20:45"></time>
+    <img src="x" alt="match Ligue 1+ add. 5 foot programme soir"><span itemprop="name">Marseille OM · Le Mans</span><a itemprop="url" href="#">x</a></div>`;
+  const items = parseFootao(html);
+  assert.deepEqual(items.map((i) => [i.start, i.channels[0]]), [['2026-11-12T19:45:00.000Z', 'TF1'], ['2026-11-22T19:45:00.000Z', 'Ligue 1+']]);
+  const evs = [
+    { title: 'Italy v France', start: '2026-11-12T19:45:00.000Z', allDay: false },
+    { title: 'Marseille v Le Mans', start: '2026-11-22T19:45:00.000Z', allDay: false },
+    { title: 'Lyon v Nice', start: '2026-11-22T19:45:00.000Z', allDay: false },
+  ];
+  assert.equal(annotateTv(evs, items), 2);
+  assert.deepEqual(evs.map((e) => e.tv), ['TF1', 'Ligue 1+', undefined]);
+  assert.equal(channelName('match beIN SPORTS MAX 4 foot programme soir'), 'beIN Sports');
+});
+
+test('plateforme des séries extraite de « Airs on … »', () => {
+  const { events } = parseICS(cal('BEGIN:VEVENT\nUID:s\nDTSTART:20261120T080000Z\nSUMMARY:The Devil\'s Plan: S3E5\nDESCRIPTION:Episode 5\\n\\nAirs on Netflix\\n\\nPowered by TVmaze\nEND:VEVENT'), ICAL, { now: NOW });
+  assert.equal(events[0].platform, 'Netflix');
+  const merged = mergedEvents({ sources: [{ id: 's1', name: 'N', url: 'x' }] }, { sources: { s1: { events } } });
+  assert.equal(merged[0].notes, 'Episode 5');
+});
+
+test('sorties musicales (iTunes) : dates de France, doublons retirés', async () => {
+  const fake = async () => ({ ok: true, json: async () => ({ results: [
+    { wrapperType: 'artist', artistName: 'SDM' },
+    { wrapperType: 'collection', collectionId: 1, artistName: 'SDM', collectionName: 'IN INFINITUM', releaseDate: '2026-11-12T23:00:00Z', trackCount: 18, collectionViewUrl: 'https://music.apple.com/x' },
+    { wrapperType: 'collection', collectionId: 2, artistName: 'SDM', collectionName: 'IN INFINITUM', releaseDate: '2026-11-12T23:00:00Z' },
+    { wrapperType: 'collection', collectionId: 3, artistName: 'SDM', collectionName: 'Vieux son - Single', releaseDate: '2020-01-01T08:00:00Z' },
+  ] }) });
+  const evs = await artistReleases(fake, { id: 1, name: 'SDM' }, { now: NOW });
+  assert.equal(evs.length, 1);
+  assert.deepEqual([evs[0].title, evs[0].start, evs[0].end, evs[0].platform], ['SDM — IN INFINITUM', '2026-11-13', '2026-11-14', 'Apple Music']);
+});

@@ -1,6 +1,7 @@
 import ICAL from './vendor/ical.min.js';
 import { parseICS, buildICS, mergedEvents, normalizeUrl, emptyConfig, emptyRemote, startMs, categoriesOf, googlePayload } from './shared/ics.js';
 import { findGist, readGist, writeGist, createGist, dispatchSync } from './shared/gist.js';
+import { MUSIC_SOURCE_ID, searchArtists, musicReleases } from './shared/itunes.js';
 
 /* ================= État ================= */
 const LS = {
@@ -140,7 +141,7 @@ const ART = {
   etoile: { label: 'Étoile', svg: '<path d="m50 8 12.5 26 28.5 4-20.5 20 5 28.5L50 73 24.5 86.5l5-28.5L9 38l28.5-4Z"/>' },
   radar: { label: 'Radar', svg: '<circle cx="50" cy="50" r="46"/><circle cx="50" cy="50" r="31"/><circle cx="50" cy="50" r="16"/><path d="M50 50 83 30"/><circle cx="50" cy="50" r="3" fill="currentColor"/>' },
 };
-const DEFAULT_ART = { sport: 'ballon', jeux: 'manette', film: 'clap', serie: 'tele', video: 'lecture' };
+const DEFAULT_ART = { sport: 'ballon', jeux: 'manette', film: 'clap', serie: 'tele', video: 'lecture', musique: 'musique' };
 const artOf = (cat) => (cat && (cat.icon || DEFAULT_ART[cat.id])) || 'radar';
 const artSvg = (key, cls = 'art') => `<svg class="${cls}" viewBox="0 0 100 100" aria-hidden="true">${(ART[key] || ART.radar).svg}</svg>`;
 
@@ -290,6 +291,56 @@ function openSyncTokenSheet(retry) {
   });
 }
 
+/** Ajoute un calendrier lié et le lit tout de suite (directement si possible, sinon via la synchro GitHub). */
+async function addSource({ name, url, category, translate = true }) {
+  const parsed = await tryDirectFetch({ url });
+  if (parsed && parsed.error) return { error: parsed.error };
+  if (!name) name = parsed?.calName || (() => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return 'Calendrier'; } })();
+  const src = { id: uid(), name, url, category: category || undefined, enabled: true, translate, addedAt: new Date().toISOString() };
+  if (S.tab !== 'sources') { S.tab = 'sources'; LS.set('tab', 'sources'); }
+  if (!parsed) S.syncing[src.id] = true;
+  await mutate((c) => { c.sources = [...(c.sources || []), src]; }, null);
+  if (parsed) {
+    try { await publishRemoteFor(src, parsed); toast(`${src.name} : ${parsed.events.length} événements importés ✓`); }
+    catch (e2) { syncNow([src.id]); }
+  } else {
+    delete S.syncing[src.id];
+    syncNow([src.id]); // le serveur du calendrier bloque la lecture directe : GitHub s'en charge tout de suite
+  }
+  return { ok: true };
+}
+
+/* Calendriers gratuits vérifiés (recherche du 12/11/2026), à ajouter d'un appui depuis Sources. */
+const SUGGESTIONS = [
+  { group: 'Football', cat: 'sport', items: [
+    ['OM', 'https://matchcalendar.football/team/marseille/marseille.ics'],
+    ['PSG', 'https://matchcalendar.football/team/paris-saint-germain/paris-saint-germain.ics'],
+    ['Ligue 1', 'https://matchcalendar.football/competition/ligue-1/ligue-1.ics'],
+    ['Ligue des champions', 'https://matchcalendar.football/competition/champions-league/champions-league.ics'],
+    ['Ligue Europa', 'https://matchcalendar.football/competition/uefa-europa-league/uefa-europa-league.ics'],
+    ['Équipe de France', 'https://matchcalendar.football/team/france/france.ics'],
+    ['Équipe de France féminine', 'https://ics.fixtur.es/v2/fr-women.ics'],
+    ['Real Madrid', 'https://matchcalendar.football/team/real-madrid/real-madrid.ics'],
+    ['Liverpool', 'https://matchcalendar.football/team/liverpool/liverpool.ics'],
+  ] },
+  { group: 'Séries', cat: 'serie', items: [
+    ['Netflix', 'https://www.smartcalendars.ai/cal/4fc097ff8c48803f38c6272953b5c349e4669652cc4686e154ecc61a7b7d968f.ics'],
+    ['Prime Video', 'https://www.smartcalendars.ai/cal/a1d170b8827c245b4bf4391c83e3551a797f91537c3d9a0f291efbd6bdde4d29.ics'],
+    ['Disney+', 'https://www.smartcalendars.ai/cal/53757181785a61d01d52b99de46f6e975311dd558adf00e3828a01756c08a1b5.ics'],
+    ['Apple TV+', 'https://www.smartcalendars.ai/cal/e93ddfee3629f75f5eec91218b5b42027335911a7d42b820b8d5c82ad1081bdf.ics'],
+  ] },
+  { group: 'Films', cat: 'film', items: [
+    ['Films les plus attendus', 'https://www.smartcalendars.ai/cal/1d98bae7fac4944084f941ee1e715ec74b994c71e7c596ec01b38b61d37a9067.ics'],
+  ] },
+];
+const sameFeed = (a, b) => normalizeUrl(a).replace(/[?#].*$/, '').replace(/\/+$/, '') === normalizeUrl(b).replace(/[?#].*$/, '').replace(/\/+$/, '');
+/** Rubrique existante la plus proche (ex. « serie » absente → la rubrique Film). */
+function suggestCat(id) {
+  if (catById(id)) return id;
+  const byName = cats().find((c) => c.name.toLowerCase().includes(id === 'serie' ? 'séri' : id === 'film' ? 'film' : id));
+  return byName ? byName.id : null;
+}
+
 /* ================= Rendu ================= */
 function render() {
   const app = $('#app');
@@ -320,6 +371,9 @@ function header(title, sub, buttons) {
 
 function allEvents() { return mergedEvents(S.config, S.remote); }
 
+/** Où le voir : la chaîne d'un match ou la plateforme d'un film, d'une série ou d'une sortie musicale. */
+const whereOf = (ev) => ev.tv || ev.platform || '';
+
 function nextCard(ev, label = 'Prochain') {
   const c = countdown(ev);
   const nc = catById(ev.category);
@@ -327,13 +381,15 @@ function nextCard(ev, label = 'Prochain') {
   return `<button class="next ${nc ? 'cat' : ''} art-${artOf(nc)}" data-ev="${esc(ev.icsUid)}"${bg}>${artSvg(artOf(nc))}
     <div class="k">${esc(label)}</div><div class="t">${esc(ev.title)}</div>
     <div class="w">${esc(dayLabel(evDayKey(ev)))}${ev.allDay ? '' : ' · ' + fmtTime(ev.start)}${ev.location ? ' · ' + esc(ev.location) : ''}</div>
+    ${whereOf(ev) ? `<div class="where">${esc(whereOf(ev))}</div>` : ''}
     <div class="count"><b>${c.n}</b><span>${c.u}</span></div></button>`;
 }
 function eventRow(e, now = Date.now(), withDay = false) {
   const past = evEndMs(e) <= now;
   const time = e.allDay ? `<div class="time">Jour<small>entier</small></div>`
     : `<div class="time">${fmtTime(e.start)}${e.end && e.end !== e.start ? `<small>${fmtTime(e.end)}</small>` : ''}</div>`;
-  const meta = [withDay && `<span>${esc(dayLabel(evDayKey(e)))}</span>`, e.location && `<span>${esc(e.location)}</span>`].filter(Boolean).join('');
+  const meta = [withDay && `<span>${esc(dayLabel(evDayKey(e)))}</span>`, e.location && `<span>${esc(e.location)}</span>`,
+    whereOf(e) && `<span class="where-tag">${esc(whereOf(e))}</span>`].filter(Boolean).join('');
   return `<button class="ev ${past ? 'past' : ''}" data-ev="${esc(e.icsUid)}">${time}
     <div class="bar" style="background:${esc(e.color || 'var(--faint)')}"></div>
     <div><div class="title">${esc(e.title)}</div>${meta ? `<div class="meta">${meta}</div>` : ''}</div></button>`;
@@ -443,6 +499,35 @@ function viewSources() {
         <div class="grow"><div class="name">${esc(s.name)}</div><div class="info ${cls}">${esc(info)}</div></div>${ICON.chev}</button>`;
     }).join('')}</div>`;
   }
+
+  // Sorties musicales : artistes suivis (API iTunes)
+  const artists = S.config.artists || [];
+  const music = S.remote.sources?.[MUSIC_SOURCE_ID];
+  html += `<div class="section-head"><div class="section-title">Artistes suivis${artists.length ? ` <span class="count-pill">${artists.length}</span>` : ''}</div>
+    <div class="head-btns"><button class="iconbtn sm" data-act="add-artist" aria-label="Suivre un artiste" title="Suivre un artiste"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button></div></div>`;
+  if (!artists.length) {
+    html += `<div class="card"><button class="row" data-act="add-artist"><div class="grow"><div class="name">Suivre un artiste</div><div class="info">Ses sorties (albums, EP, singles, précommandes) arrivent dans Radar</div></div>${ICON.chev}</button></div>`;
+  } else {
+    html += `<div class="card">${artists.map((a) => {
+      const n = (music?.events || []).filter((e) => e.artistId === a.id).length;
+      return `<button class="row" data-artist="${esc(String(a.id))}"><span class="dot" style="background:${esc(catById(S.config.musicCategory || 'musique')?.color || 'var(--faint)')};width:12px;height:12px"></span>
+        <div class="grow"><div class="name">${esc(a.name)}</div><div class="info">${S.syncing[MUSIC_SOURCE_ID] ? 'Recherche des sorties…' : `${n} sortie${n > 1 ? 's' : ''} à venir ou récente${n > 1 ? 's' : ''}`}</div></div>${ICON.chev}</button>`;
+    }).join('')}</div>`;
+  }
+
+  // Suggestions : calendriers vérifiés, ajout en un appui
+  const have = (u) => srcs.some((x) => sameFeed(x.url, u));
+  const groups = SUGGESTIONS.map((g) => ({ ...g, items: g.items.filter(([, u]) => !have(u)) })).filter((g) => g.items.length);
+  if (groups.length) {
+    html += `<div class="section-title">Suggestions</div>`;
+    for (const g of groups) {
+      const c = catById(suggestCat(g.cat));
+      html += `<div class="sugg-group">${esc(g.group)}</div><div class="card">${g.items.map(([name, u]) => `
+        <div class="row"><span class="dot" style="background:${esc(c ? c.color : 'var(--faint)')};width:10px;height:10px"></span>
+          <div class="grow"><div class="name">${esc(name)}</div><div class="info">${esc(new URL(u).hostname.replace(/^www\./, ''))}</div></div>
+          <button class="iconbtn sm" data-suggest="${esc(u)}" data-sname="${esc(name)}" data-scat="${esc(g.cat)}" aria-label="Ajouter ${esc(name)}" title="Ajouter"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button></div>`).join('')}</div>`;
+    }
+  }
   return html;
 }
 
@@ -523,10 +608,16 @@ function bindView() {
 }
 
 document.addEventListener('click', (e) => {
-  const t = e.target.closest('[data-act],[data-ev],[data-src],[data-filter],[data-tab],[data-catedit]');
+  const t = e.target.closest('[data-act],[data-ev],[data-src],[data-filter],[data-tab],[data-catedit],[data-suggest],[data-artist]');
   if (!t) return;
   if (t.dataset.tab) { goTab(t.dataset.tab); return; }
   if (t.dataset.catedit) { openCatForm(catById(t.dataset.catedit)); return; }
+  if (t.dataset.suggest) {
+    t.disabled = true; t.classList.add('spin');
+    addSource({ name: t.dataset.sname, url: t.dataset.suggest, category: suggestCat(t.dataset.scat) }).then((r) => { if (r?.error) toast(r.error, 4000); });
+    return;
+  }
+  if (t.dataset.artist) { const a = (S.config.artists || []).find((x) => String(x.id) === t.dataset.artist); if (a) openArtist(a); return; }
   if (t.dataset.filter) { S.filter = t.dataset.filter; render(); return; }
   if (t.dataset.ev) { const ev = allEvents().find((x) => x.icsUid === t.dataset.ev); if (ev) openDetail(ev); return; }
   if (t.dataset.src) { const s = S.config.sources.find((x) => x.id === t.dataset.src); if (s) openSourceForm(s); return; }
@@ -541,6 +632,7 @@ document.addEventListener('click', (e) => {
   else if (a === 'sync-all') syncNow((S.config.sources || []).filter((s) => s.enabled !== false).map((s) => s.id));
   else if (a === 'sync-token') openSyncTokenSheet();
   else if (a === 'add-cat') openCatForm();
+  else if (a === 'add-artist') openArtistSearch();
   else if (a === 'add') openAddMenu();
   else if (a === 'add-source') openSourceForm();
   else if (a === 'add-manual') openEventForm();
@@ -717,6 +809,7 @@ function openEventForm(existing) {
 
 function openDetail(ev) {
   const rows = [
+    whereOf(ev) && `<div class="kv"><span>${ev.tv ? 'Diffusion' : 'Où le voir'}</span><div>${esc(whereOf(ev))}</div></div>`,
     ev.location && `<div class="kv"><span>Lieu</span><div><a href="https://maps.apple.com/?q=${encodeURIComponent(ev.location)}" target="_blank" rel="noopener">${esc(ev.location)}</a></div></div>`,
     ev.url && /^https?:\/\//i.test(ev.url) && `<div class="kv"><span>Lien</span><div><a href="${esc(ev.url)}" target="_blank" rel="noopener">${esc(ev.url.replace(/^https?:\/\//, ''))}</a></div></div>`,
     ev.notes && `<div class="kv"><span>Notes</span><div>${esc(ev.notes)}</div></div>`,
@@ -778,21 +871,9 @@ function openSourceForm(existing) {
         return;
       }
       const btn = sh.querySelector('[data-save]'); btn.innerHTML = '…'; btn.disabled = true;
-      const parsed = await tryDirectFetch({ url });
-      if (parsed && parsed.error) { err.textContent = parsed.error; err.hidden = false; btn.innerHTML = '<b>Ajouter</b>'; btn.disabled = false; return; }
-      if (!name) name = parsed?.calName || (() => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return 'Calendrier'; } })();
-      const src = { id: uid(), name, url, category: category || undefined, enabled: true, translate: f('translate').checked, addedAt: new Date().toISOString() };
+      const res = await addSource({ name, url, category, translate: f('translate').checked });
+      if (res && res.error) { err.textContent = res.error; err.hidden = false; btn.innerHTML = '<b>Ajouter</b>'; btn.disabled = false; return; }
       closeSheet();
-      if (S.tab !== 'sources') { S.tab = 'sources'; LS.set('tab', 'sources'); }
-      if (!parsed) S.syncing[src.id] = true;
-      await mutate((c) => { c.sources = [...(c.sources || []), src]; }, null);
-      if (parsed) {
-        try { await publishRemoteFor(src, parsed); toast(`${parsed.events.length} événements importés ✓`); }
-        catch (e2) { syncNow([src.id]); }
-      } else {
-        delete S.syncing[src.id];
-        syncNow([src.id]); // le serveur du calendrier bloque la lecture directe : GitHub s'en charge tout de suite
-      }
     };
     const del = sh.querySelector('[data-del]');
     if (del) del.onclick = () => {
@@ -847,6 +928,83 @@ function openCatForm(existing) {
         (c.manual || []).forEach((m) => { if (m.category === existing.id) delete m.category; });
         for (const [k, v] of Object.entries(c.eventCategories || {})) if (v === existing.id) delete c.eventCategories[k];
       }, 'Rubrique supprimée');
+    };
+  });
+}
+
+/* ---------- Artistes suivis (sorties musicales) ---------- */
+async function refreshMusic(artists) {
+  S.syncing[MUSIC_SOURCE_ID] = true; render();
+  try {
+    const r = await musicReleases((u) => fetch(u), artists);
+    const g = await readGist(S.token, S.gistId);
+    const remote = g.remote || emptyRemote();
+    remote.sources = remote.sources || {};
+    remote.sources[MUSIC_SOURCE_ID] = { fetchedAt: new Date().toISOString(), calName: 'Sorties musique', error: r.error, events: r.events, via: 'app' };
+    const cfg = { ...emptyConfig(), ...(g.config || {}) };
+    await writeGist(S.token, S.gistId, { 'remote.json': remote, 'radar.ics': buildICS(cfg, remote), 'google.json': googlePayload(cfg, remote) });
+    S.remote = remote; S.config = cfg; persist();
+    return r.events.length;
+  } finally { delete S.syncing[MUSIC_SOURCE_ID]; render(); }
+}
+
+function openArtistSearch() {
+  openSheet(`<div class="sheet-head"><button data-close>Annuler</button><h3>Suivre un artiste</h3><span style="width:56px"></span></div>
+    <label class="search">${ICON.search}<input name="q" type="search" placeholder="Nom de l'artiste (ex. Ninho)" autocomplete="off" enterkeyhint="search"></label>
+    <div class="card" data-results style="margin-top:8px"></div>
+    <p class="note" style="margin-top:8px">Données Apple Music (iTunes), France.</p>`, (sh) => {
+    sh.querySelector('[data-close]').onclick = closeSheet;
+    const q = sh.querySelector('[name="q"]'), box = sh.querySelector('[data-results]');
+    let timer;
+    q.oninput = () => {
+      clearTimeout(timer);
+      const term = q.value.trim();
+      if (term.length < 2) { box.innerHTML = ''; return; }
+      timer = setTimeout(async () => {
+        try {
+          const list = await searchArtists((u) => fetch(u), term);
+          if (q.value.trim() !== term) return;
+          const followed = new Set((S.config.artists || []).map((a) => String(a.id)));
+          box.innerHTML = list.length ? list.map((a) => `<button class="row" data-pick="${a.id}" data-pname="${esc(a.name)}" ${followed.has(String(a.id)) ? 'disabled' : ''}>
+            <div class="grow"><div class="name">${esc(a.name)}</div><div class="info">${esc(a.genre)}${followed.has(String(a.id)) ? ' · déjà suivi' : ''}</div></div>
+            <svg class="chev" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>`).join('') : `<div class="row"><div class="grow"><div class="info">Aucun artiste trouvé.</div></div></div>`;
+          box.querySelectorAll('[data-pick]').forEach((b) => (b.onclick = async () => {
+            const artist = { id: Number(b.dataset.pick), name: b.dataset.pname };
+            closeSheet();
+            if (S.tab !== 'sources') { S.tab = 'sources'; LS.set('tab', 'sources'); }
+            await mutate((c) => {
+              c.artists = [...(c.artists || []).filter((x) => x.id !== artist.id), artist];
+              c.categories = categoriesOf(c).map((x) => ({ ...x }));
+              if (!c.musicCategory) {
+                const existing = c.categories.find((x) => /musi|rap/i.test(x.name));
+                if (existing) c.musicCategory = existing.id;
+                else { c.categories.push({ id: 'musique', name: 'Musique', color: '#0891B2', icon: 'musique' }); c.musicCategory = 'musique'; }
+              }
+            }, null);
+            try { const n = await refreshMusic(S.config.artists); toast(`${artist.name} suivi ✓ · ${n} sortie${n > 1 ? 's' : ''} au total`); }
+            catch (e) { toast(`${artist.name} suivi ; sorties récupérées à la prochaine synchro`, 4000); }
+          }));
+        } catch { box.innerHTML = `<div class="row"><div class="grow"><div class="info">Recherche impossible pour le moment.</div></div></div>`; }
+      }, 300);
+    };
+    setTimeout(() => q.focus(), 300);
+  });
+}
+
+function openArtist(a) {
+  const evs = (S.remote.sources?.[MUSIC_SOURCE_ID]?.events || []).filter((e) => e.artistId === a.id);
+  openPage(`<div class="sheet-head"><button data-close>Retour</button><h3>${esc(a.name)}</h3><span style="width:56px"></span></div>
+    <div class="stack">
+      <div class="section-title">Sorties à venir ou récentes</div>
+      ${evs.length ? `<div class="card">${evs.map((e) => eventRow(e, Date.now(), true)).join('')}</div>` : `<p class="note">Aucune sortie annoncée pour le moment.</p>`}
+      <div class="btns"><button class="btn danger" data-del>Ne plus suivre</button></div>
+    </div>`, (sh) => {
+    sh.querySelector('[data-close]').onclick = closeSheet;
+    sh.querySelector('[data-del]').onclick = async () => {
+      if (!confirm(`Ne plus suivre ${a.name} ?`)) return;
+      closeSheet();
+      await mutate((c) => { c.artists = (c.artists || []).filter((x) => x.id !== a.id); }, `${a.name} n'est plus suivi`);
+      if ((S.config.artists || []).length) refreshMusic(S.config.artists).catch(() => {});
     };
   });
 }

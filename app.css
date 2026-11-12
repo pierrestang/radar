@@ -343,3 +343,12 @@ body > canvas + .tabbar { margin-top: calc(var(--safe-top) + var(--e-3)); }
 #app > .toolbar + .chips { margin-top: var(--e-2); }
 .next-list { display: grid; gap: var(--e-2); }
 #app.sans-feuille { padding: 0; background: none; box-shadow: none; }
+
+/* Où le voir : chaîne d'un match, plateforme d'une série ou d'une sortie */
+.next .where { display: inline-block; margin-top: var(--e-2); padding: 2px var(--e-2); border-radius: var(--r-pilule);
+  background: rgba(255, 255, 255, .18); font-size: var(--t-1); font-weight: 600; }
+.ev .meta .where-tag { padding: 0 6px; border-radius: 6px; background: var(--neutre-doux); color: var(--texte); font-weight: 600; }
+.sugg-group { margin-top: var(--e-3) !important; font-size: var(--t-1); font-weight: 600; color: var(--texte); }
+#app > .sugg-group + .card { margin-top: var(--e-2); }
+#app > .section-title + .sugg-group { margin-top: var(--e-2) !important; }
+.iconbtn.spin svg { animation: spin 1s linear infinite; }

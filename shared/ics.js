@@ -123,6 +123,9 @@ export function parseICS(text, ICAL, { now = Date.now() } = {}) {
     const loc = ve.getFirstPropertyValue('location'); if (loc) ev.location = String(loc).trim();
     const desc = ve.getFirstPropertyValue('description'); if (desc) ev.notes = String(desc).trim().slice(0, 2000);
     const url = ve.getFirstPropertyValue('url'); if (url) ev.url = String(url);
+    // plateforme annoncée dans la description (flux de séries : « Airs on Netflix »)
+    const air = desc && String(desc).match(/(?:^|\n)\s*Airs on ([^\n]+)/i);
+    if (air) ev.platform = air[1].trim().replace(/\.$/, '');
     const ms = startMs(ev);
     if (ms < winStart || ms > winEnd) return;
     out.push(ev);
@@ -201,7 +204,7 @@ export function buildICS(config, remote, { now = Date.now() } = {}) {
     }
     L.push(`SUMMARY:${esc(ev.title)}`);
     if (ev.location) L.push(`LOCATION:${esc(ev.location)}`);
-    const desc = ev.notes || '';
+    const desc = fullNotes(ev);
     if (desc) L.push(`DESCRIPTION:${esc(desc)}`);
     if (ev.url) L.push(`URL:${esc(ev.url).replace(/\\([,;])/g, '$1')}`);
     if (ev.categoryName) L.push(`CATEGORIES:${esc(ev.categoryName)}`);
@@ -230,7 +233,10 @@ export function mergedEvents(config, remote) {
     const ev = withCategory({ ...m, origin: m.origin || 'manual', sourceId: null, sourceName: null, icsUid: `${m.id}@radar` }, m.category);
     seen.add(keyOf(ev)); out.push(ev);
   }
-  for (const src of config.sources || []) {
+  const sources = [...(config.sources || [])];
+  // sorties musicales des artistes suivis : une source virtuelle alimentée par la synchro (API iTunes)
+  if ((config.artists || []).length) sources.push({ id: 'itunes', name: 'Sorties musique', category: config.musicCategory || 'musique' });
+  for (const src of sources) {
     if (src.enabled === false) continue;
     const list = (remote && remote.sources && remote.sources[src.id] && remote.sources[src.id].events) || [];
     for (const e of list) {
@@ -256,6 +262,12 @@ export const DEFAULT_CATEGORIES = [
 ];
 export function categoriesOf(config) {
   return Array.isArray(config.categories) ? config.categories : DEFAULT_CATEGORIES;
+}
+
+/** Notes complètes d'un événement : où le voir (chaîne ou plateforme), puis les notes. */
+export function fullNotes(ev) {
+  const where = ev.tv ? `📺 ${ev.tv}` : ev.platform ? `▶️ ${ev.platform}` : '';
+  return [where, ev.notes].filter(Boolean).join('\n\n');
 }
 
 export function emptyConfig() {
@@ -294,7 +306,7 @@ export function googlePayload(config, remote, { now = Date.now() } = {}) {
     else if (!end || Date.parse(end) <= Date.parse(ev.start)) end = new Date(Date.parse(ev.start) + 36e5).toISOString();
     const x = { uid: ev.icsUid, title: ev.title, start: ev.start, end, allDay: !!ev.allDay };
     if (ev.location) x.location = ev.location;
-    if (ev.notes) x.notes = ev.notes;
+    const n = fullNotes(ev); if (n) x.notes = n;
     const c = googleColorId(ev.color);
     if (c) x.color = c;
     return x;

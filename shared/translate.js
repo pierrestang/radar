@@ -157,6 +157,7 @@ export function frNotes(notes) {
 export function cleanNotes(notes) {
   return String(notes).split('\n')
     .filter((l) => !/^\s*(?:Referees?|Arbitres?|Assistant referees?|VAR)\s*:/i.test(l))
+    .filter((l) => !/^\s*(?:Airs on |Powered by |Data from Wikidata|US movie release date|Support Fixtur\.es)/i.test(l))
     .join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
