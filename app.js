@@ -433,7 +433,7 @@ function viewSources() {
       else if (s.enabled === false) info = 'Masqué';
       else if (!r) info = 'Pas encore synchronisé';
       else if (r.error) { info = `Erreur : ${r.error}`; cls = 'err'; }
-      else info = `${r.events.length} événement${r.events.length > 1 ? 's' : ''} · synchro ${ago(r.fetchedAt)}`;
+      else info = `${r.events.length} événement${r.events.length > 1 ? 's' : ''}`;
       const sc = catById(s.category);
       if (sc && !S.syncing[s.id]) info = `${sc.name} · ${info}`;
       return `<button class="row" data-src="${esc(s.id)}"><span class="dot" style="background:${esc(sc ? sc.color : 'var(--faint)')};width:12px;height:12px"></span>

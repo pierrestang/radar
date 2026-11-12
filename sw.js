@@ -1,5 +1,5 @@
 // Radar — service worker : app utilisable hors ligne, mises à jour récupérées en priorité.
-const CACHE = 'radar-v39';
+const CACHE = 'radar-v40';
 const SHELL = ['./', 'index.html', 'app.css', 'app.js', 'shared/ics.js', 'shared/gist.js', 'shared/translate.js', 'vendor/ical.min.js', 'fond.js', 'polices/Newsreader.woff2', 'manifest.webmanifest', 'icons/icon-64.png', 'icons/apple-touch-icon.png'];
 
 self.addEventListener('install', (e) => {
