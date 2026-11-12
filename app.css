@@ -358,3 +358,4 @@ body > canvas + .tabbar { margin-top: calc(var(--safe-top) + var(--e-3)); }
   padding: var(--e-3); border-radius: var(--r); animation: descend .3s cubic-bezier(.22, 1, .36, 1); }
 .sheet:not(.page) .grab { display: none; }
 @keyframes descend { from { opacity: 0; transform: translateY(-16px); } }
+.row .cover { width: 44px; height: 44px; flex: none; border-radius: 6px; background: var(--neutre-doux); object-fit: cover; }

@@ -961,7 +961,10 @@ function openArtistSearch() {
           if (q.value.trim() !== term) return;
           const followed = new Set((S.config.artists || []).map((a) => String(a.id)));
           box.innerHTML = list.length ? list.map((a) => `<button class="row" data-pick="${a.id}" data-pname="${esc(a.name)}" ${followed.has(String(a.id)) ? 'disabled' : ''}>
-            <div class="grow"><div class="name">${esc(a.name)}</div><div class="info">${esc(a.genre)}${followed.has(String(a.id)) ? ' · déjà suivi' : ''}</div></div>
+            ${a.latest?.art ? `<img class="cover" src="${esc(a.latest.art)}" alt="" loading="lazy">` : '<span class="cover"></span>'}
+            <div class="grow"><div class="name">${esc(a.name)}</div>
+              <div class="info">${a.latest ? `Dernière sortie : ${esc(a.latest.name)} (${esc(a.latest.date.slice(0, 4))})` : 'Aucune sortie'}</div>
+              <div class="info">${a.count} sortie${a.count > 1 ? 's' : ''} · ${esc(a.genre)}${followed.has(String(a.id)) ? ' · déjà suivi' : ''}</div></div>
             <svg class="chev" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>`).join('') : `<div class="row"><div class="grow"><div class="info">Aucun artiste trouvé.</div></div></div>`;
           box.querySelectorAll('[data-pick]').forEach((b) => (b.onclick = async () => {
             const artist = { id: Number(b.dataset.pick), name: b.dataset.pname };

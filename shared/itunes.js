@@ -5,15 +5,28 @@ import { WINDOW_PAST_DAYS } from './ics.js';
 export const MUSIC_SOURCE_ID = 'itunes';
 const API = 'https://itunes.apple.com';
 
-/** Recherche d'artistes (pour l'ajout dans l'app). */
+/** Recherche d'artistes (pour l'ajout dans l'app), avec de quoi distinguer les homonymes :
+ *  pochette et titre de la dernière sortie, nombre de sorties. Rap d'abord, puis les plus prolifiques. */
 export async function searchArtists(fetchFn, term) {
   const r = await fetchFn(`${API}/search?term=${encodeURIComponent(term)}&entity=musicArtist&country=FR&limit=15`);
   if (!r.ok) throw new Error(`iTunes ${r.status}`);
-  const j = await r.json();
-  const list = (j.results || []).map((a) => ({ id: a.artistId, name: a.artistName, genre: a.primaryGenreName || '' }));
-  // homonymes fréquents : le rap et le hip-hop d'abord (stable pour le reste)
+  const list = ((await r.json()).results || []).map((a) => ({ id: a.artistId, name: a.artistName, genre: a.primaryGenreName || '', count: 0, latest: null }));
+  if (list.length) {
+    try {
+      const l = await fetchFn(`${API}/lookup?id=${list.map((a) => a.id).join(',')}&entity=album&country=FR&limit=200`);
+      const by = new Map(list.map((a) => [a.id, a]));
+      for (const c of (l.ok ? (await l.json()).results : []) || []) {
+        const a = c.wrapperType === 'collection' && by.get(c.artistId);
+        if (!a) continue;
+        a.count++;
+        if (!a.latest || (c.releaseDate || '') > a.latest.date) {
+          a.latest = { name: cleanName(c.collectionName || ''), date: c.releaseDate || '', art: (c.artworkUrl100 || '').replace('100x100bb', '120x120bb') };
+        }
+      }
+    } catch { /* sans détails : la liste reste utilisable */ }
+  }
   const rap = (a) => (/rap|hip/i.test(a.genre) ? 0 : 1);
-  return list.map((a, i) => [a, i]).sort((x, y) => rap(x[0]) - rap(y[0]) || x[1] - y[1]).map(([a]) => a);
+  return list.sort((x, y) => rap(x) - rap(y) || y.count - x.count);
 }
 
 const kindOf = (name) => (/\s-\s*Single$/i.test(name) ? 'single' : /\s-\s*EP$/i.test(name) ? 'EP' : 'album');
