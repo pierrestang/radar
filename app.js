@@ -1,6 +1,6 @@
 import ICAL from './vendor/ical.min.js';
 import { parseICS, buildICS, mergedEvents, normalizeUrl, emptyConfig, emptyRemote, startMs } from './shared/ics.js';
-import { findGist, readGist, writeGist, createGist } from './shared/gist.js';
+import { findGist, readGist, writeGist, createGist, dispatchSync } from './shared/gist.js';
 
 /* ================= État ================= */
 const LS = {
@@ -23,6 +23,8 @@ const S = {
   query: '',
   loading: false,
   lastLoad: LS.get('lastLoad'),
+  syncToken: LS.get('syncToken'),
+  syncing: {},
 };
 
 /* ================= Utilitaires ================= */
@@ -179,6 +181,70 @@ async function publishRemoteFor(src, parsed) {
   S.remote = remote; S.config = cfg; persist(); render();
 }
 
+/** Déclenche la synchro GitHub et attend que les sources demandées soient relues. */
+async function syncNow(ids, { quietOk = false } = {}) {
+  ids = ids.filter(Boolean);
+  if (!ids.length) return;
+  const t0 = Date.now();
+  try {
+    await dispatchSync(S.syncToken || S.token);
+  } catch (err) {
+    if ([401, 403, 404, 422].includes(err.status)) { openSyncTokenSheet(() => syncNow(ids, { quietOk })); return; }
+    toast('Impossible de lancer la synchro : ' + err.message, 5000); return;
+  }
+  ids.forEach((id) => (S.syncing[id] = true)); render();
+  if (!quietOk) toast('Synchronisation lancée…');
+  const done = (r) => r && Math.max(Date.parse(r.fetchedAt || 0) || 0, Date.parse(r.failedAt || 0) || 0) >= t0 - 3000;
+  for (let i = 0; i < 36; i++) { // jusqu'à 3 min
+    await new Promise((r) => setTimeout(r, i < 4 ? 8000 : 5000));
+    try {
+      const g = await readGist(S.token, S.gistId);
+      const remote = g.remote || emptyRemote();
+      if (ids.every((id) => done(remote.sources?.[id]))) {
+        S.remote = remote; S.config = { ...emptyConfig(), ...(g.config || {}) }; S.lastLoad = new Date().toISOString();
+        ids.forEach((id) => delete S.syncing[id]); persist(); render();
+        const errs = ids.map((id) => remote.sources[id]).filter((r) => r.error);
+        const n = ids.reduce((a, id) => a + (remote.sources[id].error ? 0 : remote.sources[id].events.length), 0);
+        toast(errs.length ? `Erreur : ${errs[0].error}` : `${n} événement${n > 1 ? 's' : ''} synchronisé${n > 1 ? 's' : ''} ✓`, 4000);
+        return;
+      }
+    } catch { /* réseau : on réessaie */ }
+  }
+  ids.forEach((id) => delete S.syncing[id]); render();
+  toast('La synchro prend du temps : le résultat apparaîtra à la prochaine actualisation.', 5000);
+}
+
+function openSyncTokenSheet(retry) {
+  openSheet(`<div class="sheet-head"><button data-close>Plus tard</button><h3>Synchro immédiate</h3><span style="width:60px"></span></div>
+    <p class="note" style="margin-top:0">Pour lire un agenda dès son ajout, Radar doit pouvoir lancer la synchro sur GitHub. Ton jeton actuel ne sert qu'au stockage : il faut un second jeton, limité à ce seul droit.</p>
+    <ol class="steps card">
+      <li><a href="https://github.com/settings/personal-access-tokens/new?name=Radar%20synchro&description=Lancer%20la%20synchro%20Radar&expires_in=none&actions=write" target="_blank" rel="noopener">Créer un jeton « fine-grained »</a>, nommé « Radar synchro », avec l'expiration la plus longue proposée.</li>
+      <li><b>Repository access</b> : « Only select repositories » › <b>radar</b>.</li>
+      <li><b>Permissions</b> › Repository › <b>Actions</b> : « Read and write ». Rien d'autre.</li>
+      <li>« Generate token », puis colle-le ci-dessous (il commence par <b>github_pat_</b>).</li>
+    </ol>
+    <div class="card" style="margin-top:12px"><label class="field"><span>Jeton de synchro</span>
+      <input name="st" type="password" placeholder="github_pat_…" autocomplete="off" autocapitalize="off" spellcheck="false"></label></div>
+    <div class="err-msg" data-err hidden></div>
+    <div class="btns"><button class="btn" data-ok>Activer</button></div>`, (sh) => {
+    sh.querySelector('[data-close]').onclick = closeSheet;
+    sh.querySelector('[data-ok]').onclick = async () => {
+      const v = sh.querySelector('[name="st"]').value.trim();
+      const err = sh.querySelector('[data-err]');
+      if (!v) return;
+      const b = sh.querySelector('[data-ok]'); b.disabled = true; b.textContent = 'Vérification…';
+      try {
+        await dispatchSync(v);
+        S.syncToken = v; LS.set('syncToken', v); closeSheet(); toast('Synchro immédiate activée ✓');
+        if (retry) retry();
+      } catch (e) {
+        err.textContent = e.status === 401 ? 'Jeton refusé.' : "Ce jeton n'a pas le droit de lancer la synchro : vérifie le dépôt « radar » et « Actions : Read and write ».";
+        err.hidden = false; b.disabled = false; b.textContent = 'Activer';
+      }
+    };
+  });
+}
+
 /* ================= Rendu ================= */
 function render() {
   const app = $('#app');
@@ -283,16 +349,18 @@ function viewSources() {
     html += `<div class="card">${srcs.map((s) => {
       const r = S.remote.sources?.[s.id];
       let info, cls = '';
-      if (s.enabled === false) info = 'Masqué';
-      else if (!r) info = `En attente de la première synchro (≤ ${SYNC_EVERY})`;
+      if (S.syncing[s.id]) info = 'Synchronisation en cours…';
+      else if (s.enabled === false) info = 'Masqué';
+      else if (!r) info = 'Pas encore synchronisé';
       else if (r.error) { info = `Erreur : ${r.error}`; cls = 'err'; }
       else info = `${r.events.length} événement${r.events.length > 1 ? 's' : ''} · synchro ${ago(r.fetchedAt)}`;
       return `<button class="row" data-src="${esc(s.id)}"><span class="dot" style="background:${esc(s.color)};width:12px;height:12px"></span>
         <div class="grow"><div class="name">${esc(s.name)}</div><div class="info ${cls}">${esc(info)}</div></div>${ICON.chev}</button>`;
     }).join('')}</div>
-    <div class="btns"><button class="btn ghost" data-act="add-source">${ICON.link} Ajouter un calendrier</button></div>`;
+    <div class="btns"><button class="btn ghost" data-act="add-source">${ICON.link} Ajouter un calendrier</button>
+      <button class="btn ghost" data-act="sync-all" ${Object.keys(S.syncing).length ? 'disabled' : ''}>${ICON.refresh} ${Object.keys(S.syncing).length ? 'Synchronisation…' : 'Synchroniser maintenant'}</button></div>`;
   }
-  html += `<p class="note">Les liens sont relus automatiquement toutes les ${SYNC_EVERY} environ. Les liens <b>webcal://</b> sont acceptés.</p>`;
+  html += `<p class="note">Chaque agenda est lu dès son ajout, puis relu automatiquement toutes les ${SYNC_EVERY} environ. Les liens <b>webcal://</b> sont acceptés.</p>`;
 
   html += `<div class="section-title">Autres entrées</div><div class="card">
     <button class="row" data-act="add-manual"><div class="grow"><div class="name">Saisie manuelle</div><div class="info">${manualCount} événement${manualCount > 1 ? 's' : ''}</div></div>${ICON.chev}</button>
@@ -318,6 +386,9 @@ function viewShare() {
 
   html += `<div class="section-title">Réglages</div><div class="card">
     <label class="field"><span>Nom du calendrier</span><input id="calname" value="${esc(S.config.calendarName || 'Radar')}" maxlength="60"></label>
+  </div>
+  <div class="card" style="margin-top:12px">
+    <button class="row" data-act="sync-token"><div class="grow"><div class="name">Synchro immédiate</div><div class="info">${S.syncToken ? 'Activée' : 'À activer : lire un agenda dès son ajout'}</div></div>${ICON.chev}</button>
   </div>
   <div class="card" style="margin-top:12px">
     <button class="row" data-act="logout"><div class="grow"><div class="name" style="color:var(--danger)">Déconnecter cet appareil</div><div class="info">Tes données restent dans ton Gist GitHub.</div></div></button>
@@ -380,6 +451,8 @@ document.addEventListener('click', (e) => {
   if (t.dataset.src) { const s = S.config.sources.find((x) => x.id === t.dataset.src); if (s) openSourceForm(s); return; }
   const a = t.dataset.act;
   if (a === 'reload') load();
+  else if (a === 'sync-all') syncNow((S.config.sources || []).filter((s) => s.enabled !== false).map((s) => s.id));
+  else if (a === 'sync-token') openSyncTokenSheet();
   else if (a === 'add') openAddMenu();
   else if (a === 'add-source') openSourceForm();
   else if (a === 'add-manual') openEventForm();
@@ -396,8 +469,8 @@ async function copyUrl() {
 }
 function logout() {
   if (!confirm('Déconnecter Radar de cet appareil ?')) return;
-  ['token', 'gistId', 'config', 'remote', 'icsUrl', 'lastLoad', 'dirty'].forEach(LS.del);
-  Object.assign(S, { token: null, gistId: null, config: emptyConfig(), remote: emptyRemote(), icsUrl: null, lastLoad: null, tab: 'agenda' });
+  ['token', 'gistId', 'config', 'remote', 'icsUrl', 'lastLoad', 'dirty', 'syncToken'].forEach(LS.del);
+  Object.assign(S, { syncToken: null, syncing: {}, token: null, gistId: null, config: emptyConfig(), remote: emptyRemote(), icsUrl: null, lastLoad: null, tab: 'agenda' });
   render();
 }
 
@@ -546,7 +619,7 @@ function openSourceForm(existing) {
       ${existing ? `<div class="toggle"><span>Afficher dans Radar</span><label class="switch"><input type="checkbox" name="enabled" ${existing.enabled !== false ? 'checked' : ''}><i></i></label></div>` : ''}
     </div>
     <div class="err-msg" data-err hidden></div>
-    ${existing ? '' : `<p class="note">Sur Sync2Cal, ouvre le calendrier voulu puis copie son lien d'abonnement (« Copy link » / iCal). Il est relu automatiquement toutes les ${SYNC_EVERY} environ.</p>`}
+    ${existing ? '' : `<p class="note">Sur Sync2Cal, ouvre le calendrier voulu puis copie son lien d'abonnement (« Copy link » / iCal). Il est lu tout de suite, puis relu toutes les ${SYNC_EVERY} environ.</p>`}
     ${existing ? `<div class="btns"><button class="btn danger" data-del>Retirer ce calendrier</button></div>` : ''}`, (sh) => {
     const f = (n) => sh.querySelector(`[name="${n}"]`);
     sh.querySelectorAll('[data-color]').forEach((b) => (b.onclick = () => {
@@ -563,7 +636,8 @@ function openSourceForm(existing) {
       if (existing) {
         const enabled = f('enabled').checked;
         closeSheet();
-        mutate((c) => { const s = c.sources.find((x) => x.id === existing.id); if (s) Object.assign(s, { url, name: name || s.name, color, enabled }); }, 'Calendrier mis à jour');
+        await mutate((c) => { const s = c.sources.find((x) => x.id === existing.id); if (s) Object.assign(s, { url, name: name || s.name, color, enabled }); }, url === existing.url ? 'Calendrier mis à jour' : null);
+        if (url !== existing.url && enabled) syncNow([existing.id]);
         return;
       }
       const btn = sh.querySelector('[data-save]'); btn.innerHTML = '…'; btn.disabled = true;
@@ -572,10 +646,15 @@ function openSourceForm(existing) {
       if (!name) name = parsed?.calName || (() => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return 'Calendrier'; } })();
       const src = { id: uid(), name, url, color, enabled: true, addedAt: new Date().toISOString() };
       closeSheet();
-      await mutate((c) => { c.sources = [...(c.sources || []), src]; }, parsed ? null : `Calendrier ajouté : import à la prochaine synchro (≤ ${SYNC_EVERY})`);
+      if (S.tab !== 'sources') { S.tab = 'sources'; LS.set('tab', 'sources'); }
+      if (!parsed) S.syncing[src.id] = true;
+      await mutate((c) => { c.sources = [...(c.sources || []), src]; }, null);
       if (parsed) {
         try { await publishRemoteFor(src, parsed); toast(`${parsed.events.length} événements importés ✓`); }
-        catch (e2) { toast('Ajouté, import à la prochaine synchro.'); }
+        catch (e2) { syncNow([src.id]); }
+      } else {
+        delete S.syncing[src.id];
+        syncNow([src.id]); // le serveur du calendrier bloque la lecture directe : GitHub s'en charge tout de suite
       }
     };
     const del = sh.querySelector('[data-del]');

@@ -14,7 +14,7 @@ App : https://pierrestang.github.io/radar/
 |---|---|
 | GitHub Pages (ce dépôt) | l'app (PWA statique, sans données) |
 | Gist secret « Radar — données » | `config.json` (sources, ajouts manuels, masqués) · `remote.json` (événements des flux) · `radar.ics` (calendrier fusionné publié) |
-| GitHub Actions `sync.yml` | toutes les ~30 min : relit chaque flux, met à jour `remote.json` et `radar.ics` |
+| GitHub Actions `sync.yml` | lancée par l'app dès qu'un agenda est ajouté (ou modifié), et toutes les ~30 min : relit chaque flux, met à jour `remote.json` et `radar.ics` |
 
 L'app écrit `config.json` et régénère `radar.ics` immédiatement ; la synchro écrit `remote.json` et `radar.ics`. Le lien d'abonnement est l'URL « raw » du Gist (`…/raw/radar.ics`, toujours la dernière version).
 
@@ -22,7 +22,8 @@ L'app écrit `config.json` et régénère `radar.ics` immédiatement ; la synchr
 1. Créer un jeton GitHub classique, portée **gist** uniquement : https://github.com/settings/tokens/new?scopes=gist&description=Radar
 2. Sur l'iPhone : ouvrir l'app dans Safari › Partager › **Sur l'écran d'accueil**, l'ouvrir depuis l'icône et coller le jeton (le Gist est créé automatiquement).
 3. Donner le même jeton à la synchro : `gh secret set GIST_TOKEN -R pierrestang/radar`
-4. Onglet **Abonnement** › « Ajouter à Google Agenda ».
+4. Synchro immédiate : au premier ajout d'agenda, l'app demande un second jeton *fine-grained* limité au dépôt `radar` avec **Actions : Read and write** (sert uniquement à lancer `sync.yml`).
+5. Onglet **Abonnement** › « Ajouter à Google Agenda ».
 
 ## Développement
 ```sh

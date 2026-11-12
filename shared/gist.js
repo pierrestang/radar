@@ -71,3 +71,9 @@ export async function createGist(token, files) {
   }
   return gh(token, '/gists', { method: 'POST', body: JSON.stringify({ description: GIST_DESCRIPTION, public: false, files: payload }) });
 }
+
+/** Lance tout de suite la synchro GitHub Actions (jeton avec le droit « Actions : écriture » sur le dépôt). */
+export const SYNC_REPO = 'pierrestang/radar';
+export async function dispatchSync(token, repo = SYNC_REPO) {
+  return gh(token, `/repos/${repo}/actions/workflows/sync.yml/dispatches`, { method: 'POST', body: JSON.stringify({ ref: 'main' }) });
+}

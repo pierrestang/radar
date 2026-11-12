@@ -9,4 +9,5 @@ Voir README.md pour l'architecture. Points non évidents :
 
 ## État d'avancement
 - 2026-11-12 : v1 — PWA (agenda, sources, abonnement), saisie manuelle, flux .ics, synchro Actions 30 min, 6 tests.
+- 2026-11-12 : synchro immédiate — l'app lance `sync.yml` (workflow_dispatch) à l'ajout/changement d'URL d'un agenda et suit l'avancement ; second jeton fine-grained (Actions write sur `radar`) stocké en `radar.syncToken`. Lecture directe depuis le navigateur tentée d'abord (si CORS autorisé).
 - À faire : capture d'écran → événement.
