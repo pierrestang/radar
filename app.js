@@ -302,6 +302,7 @@ function render() {
   const titre = $('.titre-site'), menu = $('#tabbar');
   const accueil = !connected || S.tab === 'home';
   titre.classList.toggle('accueil', accueil);
+  app.classList.toggle('sans-feuille', connected && S.tab === 'home'); // Accueil : les cartes posées sur le fond, comme dans Fantôme
   if (accueil && connected && menu.nextElementSibling !== titre) document.body.insertBefore(menu, titre);
   if (!accueil && titre.nextElementSibling !== menu) document.body.insertBefore(titre, menu);
   if (!connected) { app.innerHTML = viewSetup(); bindSetup(); return; }
