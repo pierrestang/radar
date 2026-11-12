@@ -461,10 +461,11 @@ function viewSettings() {
 
   // Publication : Google Agenda et lien
   html += `<div class="section-title">Publication</div>
-    <div class="card"><div class="row"><span class="dot" style="width:12px;height:12px"></span>
-      <div class="grow"><div class="name">Google Agenda</div><div class="info">Connecté</div></div></div>
+    <div class="card"><div class="row"><div class="grow"><div class="name">Google Agenda</div></div>
+      <span class="badge-ok"><i></i>Connecté</span></div>
     <label class="field"><span>Nom du calendrier</span><input id="calname" value="${esc(S.config.calendarName || 'Radar')}" maxlength="60"></label></div>
-    <div class="url-row" style="margin-top:12px"><div class="url-box" id="icsurl">${esc(url || 'Lien disponible après la première synchro…')}</div>
+    <div class="section-title">URL de l'agenda</div>
+    <div class="url-row"><div class="url-box" id="icsurl">${esc(url || 'Lien disponible après la première synchro…')}</div>
       <button class="iconbtn" data-act="copy" aria-label="Copier le lien" title="Copier le lien">${ICON.copy}</button></div>`;
 
   // Compte

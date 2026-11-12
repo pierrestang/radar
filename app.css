@@ -324,3 +324,10 @@ body > canvas + .tabbar { margin-top: calc(var(--safe-top) + var(--e-3)); }
 .stack .btns { margin-top: var(--e-2); }
 .stack [data-form] > * + * { margin-top: var(--e-2); }
 .stack [data-form] .btns { margin-top: var(--e-3); }
+
+/* Badge d'état « Connecté » : vert, avec sa pastille */
+.badge-ok { display: inline-flex; align-items: center; gap: 6px; flex: none; padding: 2px var(--e-2); border-radius: var(--r-pilule);
+  background: #e6efe4; color: var(--succes); font-size: var(--t-1); font-weight: 600; }
+.badge-ok i { width: 7px; height: 7px; border-radius: 50%; background: var(--succes); }
+#app > .card + .section-title { margin-top: var(--e-3); }
+.card:has(> .ev, > .row, > .choice) > *::before { display: none; }
