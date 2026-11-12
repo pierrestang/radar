@@ -18,7 +18,7 @@ const S = {
   config: LS.get('config') || emptyConfig(),
   remote: LS.get('remote') || emptyRemote(),
   icsUrl: LS.get('icsUrl'),
-  tab: ({ share: 'settings' })[LS.get('tab', 'agenda')] || LS.get('tab', 'agenda'),
+  tab: ({ share: 'settings' })[LS.get('tab', 'home')] || LS.get('tab', 'home'),
   filter: 'all',
   query: '',
   loading: false,
@@ -279,19 +279,20 @@ function render() {
   const app = $('#app');
   const connected = S.token && S.gistId;
   $('#tabbar').hidden = !connected;
-  $('#fab').hidden = !connected || S.tab !== 'agenda';
+  $('#fab').hidden = !connected || (S.tab !== 'agenda' && S.tab !== 'home');
   document.querySelectorAll('#tabbar button').forEach((b) => b.classList.toggle('on', b.dataset.tab === S.tab));
-  // Comme dans Fantôme : sur l'Agenda (l'accueil), le menu en haut puis le grand titre ; ailleurs, le titre
+  // Comme dans Fantôme : sur l'Accueil, le menu en haut puis le grand titre ; ailleurs, le titre
   // plus petit au-dessus du menu. Pendant un changement d'onglet, la transition fait glisser l'un et l'autre.
   const titre = $('.titre-site'), menu = $('#tabbar');
-  const accueil = !connected || S.tab === 'agenda';
+  const accueil = !connected || S.tab === 'home';
   titre.classList.toggle('accueil', accueil);
   if (accueil && connected && menu.nextElementSibling !== titre) document.body.insertBefore(menu, titre);
   if (!accueil && titre.nextElementSibling !== menu) document.body.insertBefore(titre, menu);
   if (!connected) { app.innerHTML = viewSetup(); bindSetup(); return; }
   if (S.tab === 'sources') app.innerHTML = viewSources();
   else if (S.tab === 'settings') app.innerHTML = viewSettings();
-  else app.innerHTML = viewAgenda();
+  else if (S.tab === 'agenda') app.innerHTML = viewAgenda();
+  else app.innerHTML = viewHome();
   bindView();
 }
 
@@ -301,6 +302,44 @@ function header(title, sub, buttons) {
 }
 
 function allEvents() { return mergedEvents(S.config, S.remote); }
+
+function nextCard(ev) {
+  const c = countdown(ev);
+  const nc = catById(ev.category);
+  const bg = nc ? ` style="--card:${esc(nc.color)}"` : '';
+  return `<button class="next ${nc ? 'cat' : ''} art-${artOf(nc)}" data-ev="${esc(ev.icsUid)}"${bg}>${artSvg(artOf(nc))}
+    <div class="k">Prochain</div><div class="t">${esc(ev.title)}</div>
+    <div class="w">${esc(dayLabel(evDayKey(ev)))}${ev.allDay ? '' : ' · ' + fmtTime(ev.start)}${ev.location ? ' · ' + esc(ev.location) : ''}</div>
+    <div class="count"><b>${c.n}</b><span>${c.u}</span></div></button>`;
+}
+function eventRow(e, now = Date.now()) {
+  const past = evEndMs(e) <= now;
+  const time = e.allDay ? `<div class="time">Jour<small>entier</small></div>`
+    : `<div class="time">${fmtTime(e.start)}${e.end && e.end !== e.start ? `<small>${fmtTime(e.end)}</small>` : ''}</div>`;
+  const meta = e.location ? `<span>${esc(e.location)}</span>` : '';
+  return `<button class="ev ${past ? 'past' : ''}" data-ev="${esc(e.icsUid)}">${time}
+    <div class="bar" style="background:${esc(e.color || 'var(--faint)')}"></div>
+    <div><div class="title">${esc(e.title)}</div>${meta ? `<div class="meta">${meta}</div>` : ''}</div></button>`;
+}
+
+/** Accueil : le prochain événement et ceux du jour, rien d'autre. */
+function viewHome() {
+  const now = Date.now();
+  const todayKey = localDateKey(new Date());
+  const evs = allEvents().filter((e) => evEndMs(e) > now);
+  const sub = `<span class="sync-pill ${S.lastLoad ? '' : 'off'}"><i></i>${S.loading ? 'Actualisation…' : 'À jour ' + ago(S.lastLoad)}</span>`;
+  let html = header('Accueil', sub);
+  const nextEv = evs.find((e) => evStartLocalMs(e) > now) || evs[0];
+  if (!nextEv) {
+    return html + `<div class="empty">${ICON.radar}<h3>Rien sur le radar</h3><p>Ajoute un événement ou lie un calendrier.</p></div>`;
+  }
+  html += nextCard(nextEv);
+  const today = evs.filter((e) => e !== nextEv && (e.allDay ? e.start <= todayKey : localDateKey(new Date(e.start)) <= todayKey));
+  if (today.length) {
+    html += `<section class="day"><h2 class="today">Aujourd'hui</h2><div class="card">${today.map((e) => eventRow(e, now)).join('')}</div></section>`;
+  }
+  return html;
+}
 
 function viewAgenda() {
   const now = Date.now();
@@ -314,20 +353,10 @@ function viewAgenda() {
     evs = evs.filter((e) => [e.title, e.location, e.notes, e.categoryName].some((x) => x && x.toLowerCase().includes(q)));
   }
   const upcoming = evs.filter((e) => evEndMs(e) > now);
-  const nextEv = !S.query && upcoming.find((e) => !e.allDay || e.start >= localDateKey(new Date()));
   const sub = `<span class="sync-pill ${S.lastLoad ? '' : 'off'}"><i></i>${S.loading ? 'Actualisation…' : 'À jour ' + ago(S.lastLoad)}</span>`;
 
   let html = header('Agenda', sub);
 
-  if (nextEv) {
-    const c = countdown(nextEv);
-    const nc = catById(nextEv.category);
-    const bg = nc ? ` style="--card:${esc(nc.color)}"` : '';
-    html += `<button class="next ${nc ? 'cat' : ''} art-${artOf(nc)}" data-ev="${esc(nextEv.icsUid)}"${bg}>${artSvg(artOf(nc))}
-      <div class="k">Prochain</div><div class="t">${esc(nextEv.title)}</div>
-      <div class="w">${esc(dayLabel(evDayKey(nextEv)))}${nextEv.allDay ? '' : ' · ' + fmtTime(nextEv.start)}${nextEv.location ? ' · ' + esc(nextEv.location) : ''}</div>
-      <div class="count"><b>${c.n}</b><span>${c.u}</span></div></button>`;
-  }
 
   if (allEvents().length || S.query) {
     html += `<label class="search">${ICON.search}<input id="q" type="search" placeholder="Rechercher" value="${esc(S.query)}" autocomplete="off"></label>`;
@@ -363,15 +392,7 @@ function viewAgenda() {
     if (shown > 400) break;
     shown += list.length;
     html += `<section class="day"><h2 class="${k === todayKey ? 'today' : ''}">${esc(dayLabel(k))}<em>${relDays(k)}</em></h2><div class="card">`;
-    for (const e of list) {
-      const past = evEndMs(e) <= now;
-      const time = e.allDay ? `<div class="time">Jour<small>entier</small></div>`
-        : `<div class="time">${fmtTime(e.start)}${e.end && e.end !== e.start ? `<small>${fmtTime(e.end)}</small>` : ''}</div>`;
-      const meta = e.location ? `<span>${esc(e.location)}</span>` : '';
-      html += `<button class="ev ${past ? 'past' : ''}" data-ev="${esc(e.icsUid)}">${time}
-        <div class="bar" style="background:${esc(e.color || 'var(--faint)')}"></div>
-        <div><div class="title">${esc(e.title)}</div>${meta ? `<div class="meta">${meta}</div>` : ''}</div></button>`;
-    }
+    for (const e of list) html += eventRow(e, now);
     html += `</div></section>`;
   }
   return html;
@@ -505,7 +526,7 @@ document.addEventListener('click', (e) => {
 $('#fab').onclick = () => openAddMenu();
 
 /* Onglets dans l'ordre du menu : flèches ← → du clavier, ou glissement du doigt vers la gauche / la droite. */
-const TABS = ['agenda', 'sources', 'settings'];
+const TABS = ['home', 'agenda', 'sources', 'settings'];
 function goTab(tab) {
   if (!TABS.includes(tab) || tab === S.tab) return;
   const swap = () => { S.tab = tab; LS.set('tab', tab); closeSheet(); render(); window.scrollTo(0, 0); };
@@ -548,7 +569,7 @@ async function copyUrl(forGoogle = false) {
 function logout() {
   if (!confirm('Déconnecter Radar de cet appareil ?')) return;
   ['token', 'gistId', 'config', 'remote', 'icsUrl', 'lastLoad', 'dirty', 'syncToken'].forEach(LS.del);
-  Object.assign(S, { syncToken: null, syncing: {}, token: null, gistId: null, config: emptyConfig(), remote: emptyRemote(), icsUrl: null, lastLoad: null, tab: 'agenda' });
+  Object.assign(S, { syncToken: null, syncing: {}, token: null, gistId: null, config: emptyConfig(), remote: emptyRemote(), icsUrl: null, lastLoad: null, tab: 'home' });
   render();
 }
 
@@ -658,7 +679,7 @@ function openEventForm(existing) {
         c.manual = (c.manual || []).filter((m) => m.id !== rec.id);
         c.manual.push(rec);
       }, existing ? 'Événement modifié' : 'Ajouté au radar ✓');
-      if (S.tab !== 'agenda') { S.tab = 'agenda'; LS.set('tab', 'agenda'); render(); }
+      if (S.tab !== 'agenda' && S.tab !== 'home') { S.tab = 'agenda'; LS.set('tab', 'agenda'); render(); }
     };
     const del = sh.querySelector('[data-del]');
     if (del) del.onclick = () => {
@@ -812,5 +833,5 @@ load({ quiet: true });
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && (!S.lastLoad || Date.now() - Date.parse(S.lastLoad) > 6e4)) load({ quiet: true });
 });
-setInterval(() => { if (document.visibilityState === 'visible' && S.tab === 'agenda' && $('#sheet').hidden && document.activeElement?.id !== 'q') render(); }, 60000);
+setInterval(() => { if (document.visibilityState === 'visible' && (S.tab === 'agenda' || S.tab === 'home') && $('#sheet').hidden && document.activeElement?.id !== 'q') render(); }, 60000);
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
