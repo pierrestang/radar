@@ -15,7 +15,7 @@ if (dry > -1) {
 }
 
 const token = process.env.GIST_TOKEN;
-if (!token) { console.error('GIST_TOKEN manquant (secret du dépôt).'); process.exit(1); }
+if (!token) { console.log('::notice::GIST_TOKEN pas encore configuré (gh secret set GIST_TOKEN) : synchro ignorée.'); process.exit(0); }
 const id = process.env.GIST_ID || (await findGist(token));
 if (!id) { console.log('Aucun Gist Radar pour l’instant : ouvre l’app une première fois pour le créer.'); process.exit(0); }
 
