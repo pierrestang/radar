@@ -1,6 +1,7 @@
 # Radar — notes pour Claude
 
 Voir README.md pour l'architecture. Points non évidents :
+- **Direction artistique = celle de Fantôme** (~/Fantome/app/static/style.css) : fond animé `fond.js` (copie de Fantôme), feuille crème translucide, Newsreader en serif (`polices/`, licence OFL), tailles 13/15/22/32, espacements 4/8/16/32, arrondis 10/8, boutons noirs, un seul thème clair. Champs à 16 px (anti-zoom iPhone).
 - **Données réelles** dans le Gist secret de l'utilisateur (trouvé par sa description `Radar — données (ne pas supprimer)`). Pour tester, utiliser des données factices injectées dans localStorage (`radar.*`), jamais écrire dans le vrai Gist sans accord.
 - Dépôt **public** : ne jamais committer d'ID de Gist, de jeton ni d'événement. Les logs Actions sont publics → `sync.mjs` ne journalise pas les titres.
 - Code partagé navigateur/Node dans `shared/` (ESM sans dépendance, ical.js injecté).

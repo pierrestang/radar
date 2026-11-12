@@ -5,8 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Radar</title>
   <meta name="description" content="Mon agenda d'événements à venir, fusionné en un seul calendrier.">
-  <meta name="theme-color" content="#F3F4EF" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#0B0F0E" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#c9bfa6">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -14,9 +13,11 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon-64.png" type="image/png">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="preload" href="polices/Newsreader.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="app.css">
 </head>
 <body>
+  <canvas id="fond" aria-hidden="true"></canvas>
   <div id="app" aria-live="polite"></div>
 
   <nav class="tabbar" id="tabbar" hidden>
@@ -39,5 +40,6 @@
   <div class="toast" id="toast" role="status" hidden></div>
 
   <script type="module" src="app.js"></script>
+  <script src="fond.js" defer></script>
 </body>
 </html>
