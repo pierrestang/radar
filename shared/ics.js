@@ -1,6 +1,6 @@
 // Radar — cœur partagé entre l'app (navigateur) et la synchro (GitHub Actions / Node).
 // Aucune dépendance : ical.js est injecté par l'appelant.
-import { frenchify } from './translate.js';
+import { frenchify, cleanNotes } from './translate.js';
 
 export const DEFAULT_TZ = 'Europe/Paris';
 export const WINDOW_PAST_DAYS = 30;
@@ -234,7 +234,7 @@ export function mergedEvents(config, remote) {
     if (src.enabled === false) continue;
     const list = (remote && remote.sources && remote.sources[src.id] && remote.sources[src.id].events) || [];
     for (const e of list) {
-      const base = src.translate === false ? e : frenchify(e);
+      const base = src.translate === false ? { ...e, notes: e.notes ? cleanNotes(e.notes) || undefined : undefined } : frenchify(e);
       const ev = { ...base, origin: 'feed', sourceId: src.id, sourceName: src.name, icsUid: `${e.uid}@radar-${src.id}` };
       withCategory(ev, src.category);
       if (hidden.has(ev.icsUid)) continue;

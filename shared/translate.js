@@ -145,13 +145,19 @@ export function frNotes(notes) {
     let m;
     if ((m = l.match(/^Half[- ]?time:?\s*(\d+\s*[-–]\s*\d+)$/i))) return `Mi-temps : ${m[1].replace(/\s/g, '')}`;
     if ((m = l.match(/^Full[- ]?time:?\s*(\d+\s*[-–]\s*\d+)$/i))) return `Score final : ${m[1].replace(/\s/g, '')}`;
-    if ((m = l.match(/^Referee:?\s*(.+)$/i))) return `Arbitre : ${m[1]}`;
     if ((m = l.match(/^Venue:?\s*(.+)$/i))) return `Stade : ${m[1]}`;
     if ((m = l.match(/^Attendance:?\s*(.+)$/i))) return `Affluence : ${m[1]}`;
     if ((m = l.match(/^(?:TV|Broadcast(?:er)?s?|Channel)s?:?\s*(.+)$/i))) return `Diffusion : ${m[1]}`;
     if ((m = l.match(/^Kick[- ]?off:?\s*(.+)$/i))) return `Coup d'envoi : ${m[1]}`;
     return frCompetitionLine(l) || line;
   }).join('\n');
+}
+
+/** Retire les lignes inutiles (arbitres) et les lignes vides en trop. */
+export function cleanNotes(notes) {
+  return String(notes).split('\n')
+    .filter((l) => !/^\s*(?:Referees?|Arbitres?|Assistant referees?|VAR)\s*:/i.test(l))
+    .join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
 export function frLocation(loc) {
@@ -165,7 +171,7 @@ export function frLocation(loc) {
 /** Renvoie une copie francisée d'un événement de flux. */
 export function frenchify(ev) {
   const out = { ...ev, title: frTitle(ev.title) };
-  if (ev.notes) out.notes = frNotes(ev.notes);
+  if (ev.notes) out.notes = frNotes(cleanNotes(ev.notes)) || undefined;
   if (ev.location) out.location = frLocation(ev.location);
   return out;
 }
