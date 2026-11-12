@@ -48,9 +48,6 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 
 /* ---------- En-tête ---------- */
 .head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin: 8px 0 14px; }
-.head-title { display: flex; align-items: center; gap: 12px; min-width: 0; }
-.head-logo { width: 44px; height: 44px; border-radius: 11px; flex: none; }
-.hero .logo-img { width: 112px; height: 112px; border-radius: 26px; box-shadow: var(--shadow); }
 .head h1 { font-size: 34px; line-height: 1.05; letter-spacing: -.02em; margin: 0; font-weight: 750; }
 .head .sub { color: var(--muted); font-size: 14px; margin-top: 4px; }
 .iconbtn {
