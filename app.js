@@ -211,18 +211,19 @@ async function publishRemoteFor(src, parsed) {
 }
 
 /** Déclenche la synchro GitHub et attend que les sources demandées soient relues. */
-async function syncNow(ids, { quietOk = false } = {}) {
+async function syncNow(ids, { quietOk = false, silent = false } = {}) {
   ids = ids.filter(Boolean);
   if (!ids.length) return;
   const t0 = Date.now();
   try {
     await dispatchSync(S.syncToken || S.token);
   } catch (err) {
+    if (silent) return;
     if ([401, 403, 404, 422].includes(err.status)) { openSyncTokenSheet(() => syncNow(ids, { quietOk })); return; }
     toast('Impossible de lancer la synchro : ' + err.message, 5000); return;
   }
   ids.forEach((id) => (S.syncing[id] = true)); render();
-  if (!quietOk) toast('Synchronisation lancée…');
+  if (!quietOk && !silent) toast('Synchronisation lancée…');
   const done = (r) => r && Math.max(Date.parse(r.fetchedAt || 0) || 0, Date.parse(r.failedAt || 0) || 0) >= t0 - 3000;
   for (let i = 0; i < 36; i++) { // jusqu'à 3 min
     await new Promise((r) => setTimeout(r, i < 4 ? 8000 : 5000));
@@ -234,13 +235,13 @@ async function syncNow(ids, { quietOk = false } = {}) {
         ids.forEach((id) => delete S.syncing[id]); persist(); render();
         const errs = ids.map((id) => remote.sources[id]).filter((r) => r.error);
         const n = ids.reduce((a, id) => a + (remote.sources[id].error ? 0 : remote.sources[id].events.length), 0);
-        toast(errs.length ? `Erreur : ${errs[0].error}` : `${n} événement${n > 1 ? 's' : ''} synchronisé${n > 1 ? 's' : ''} ✓`, 4000);
+        if (!silent || errs.length) toast(errs.length ? `Erreur : ${errs[0].error}` : `${n} événement${n > 1 ? 's' : ''} synchronisé${n > 1 ? 's' : ''} ✓`, 4000);
         return;
       }
     } catch { /* réseau : on réessaie */ }
   }
   ids.forEach((id) => delete S.syncing[id]); render();
-  toast('La synchro prend du temps : le résultat apparaîtra à la prochaine actualisation.', 5000);
+  if (!silent) toast('La synchro prend du temps : le résultat apparaîtra à la prochaine actualisation.', 5000);
 }
 
 function openSyncTokenSheet(retry) {
@@ -367,9 +368,7 @@ function viewAgenda() {
     evs = evs.filter((e) => [e.title, e.location, e.notes, e.categoryName].some((x) => x && x.toLowerCase().includes(q)));
   }
   const upcoming = evs.filter((e) => evEndMs(e) > now);
-  const sub = `<span class="sync-pill ${S.lastLoad ? '' : 'off'}"><i></i>${S.loading ? 'Actualisation…' : 'À jour ' + ago(S.lastLoad)}</span>`;
-
-  let html = header('Agenda', sub, `<div class="head-btns">
+  let html = header('Agenda', '', `<div class="head-btns">
     <button class="iconbtn sm" data-act="add" aria-label="Ajouter" title="Ajouter"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
     <button class="iconbtn sm ${S.loading || Object.keys(S.syncing).length ? 'spin' : ''}" data-act="refresh-all" ${Object.keys(S.syncing).length ? 'disabled' : ''} aria-label="Synchroniser" title="Synchroniser les sources et l'agenda">${ICON.refresh}</button></div>`);
 
@@ -852,9 +851,20 @@ function openCatForm(existing) {
 
 /* ================= Démarrage ================= */
 render();
-load({ quiet: true });
+/** Au lancement (et au retour dans l'app après un moment) : agenda relu, puis calendriers liés relus, sans bruit. */
+let lastAuto = 0;
+async function autoSync() {
+  if (!(S.token && S.gistId) || !S.syncToken || Date.now() - lastAuto < 10 * 6e4) return;
+  lastAuto = Date.now();
+  await load({ quiet: true });
+  const ids = (S.config.sources || []).filter((x) => x.enabled !== false).map((x) => x.id);
+  if (ids.length && !Object.keys(S.syncing).length) syncNow(ids, { silent: true });
+}
+load({ quiet: true }).then(autoSync);
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && (!S.lastLoad || Date.now() - Date.parse(S.lastLoad) > 6e4)) load({ quiet: true });
+  if (document.visibilityState !== 'visible') return;
+  if (!S.lastLoad || Date.now() - Date.parse(S.lastLoad) > 6e4) load({ quiet: true });
+  autoSync();
 });
 setInterval(() => { if (document.visibilityState === 'visible' && (S.tab === 'agenda' || S.tab === 'home') && $('#sheet').hidden && document.activeElement?.id !== 'q') render(); }, 60000);
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
