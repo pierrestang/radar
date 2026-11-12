@@ -402,9 +402,6 @@ function viewSources() {
     return `<button class="row" data-catedit="${esc(c.id)}"><span class="dot" style="background:${esc(c.color)};width:12px;height:12px"></span>
       <div class="grow"><div class="name">${esc(c.name)}</div><div class="info">${n} événement${n > 1 ? 's' : ''}</div></div>${ICON.chev}</button>`;
   }).join('')}<button class="row" data-act="add-cat"><div class="grow"><div class="name" style="color:var(--accent)">Nouvelle rubrique</div></div></button></div>`;
-  html += `<div class="section-title">Autres entrées</div><div class="card">
-    <div class="row" style="opacity:.55"><div class="grow"><div class="name">Capture d'écran <span class="badge">BIENTÔT</span></div><div class="info">Lire une affiche ou un billet pour en extraire l'événement</div></div></div>
-  </div>`;
   return html;
 }
 
@@ -496,7 +493,7 @@ document.addEventListener('click', (e) => {
   else if (a === 'gcal') { const w = window.open('https://calendar.google.com/calendar/u/0/r/settings/addbyurl', '_blank', 'noopener'); copyUrl(true); if (!w) location.href = 'https://calendar.google.com/calendar/u/0/r/settings/addbyurl'; }
   else if (a === 'logout') logout();
 });
-$('#fab').onclick = () => openEventForm();
+$('#fab').onclick = () => openAddMenu();
 $('#scrim').onclick = () => closeSheet();
 
 async function copyUrl(forGoogle = false) {
@@ -527,12 +524,10 @@ function openAddMenu() {
   openSheet(`<div class="sheet-head"><h3>Ajouter à Radar</h3><button data-close>Fermer</button></div>
     <div class="card">
       <button class="choice" data-c="manual"><span class="ic">${ICON.pen}</span><span><b>Saisir un événement</b><small>Titre, date, lieu…</small></span></button>
-      <button class="choice" data-c="source"><span class="ic">${ICON.link}</span><span><b>Coller un lien de calendrier</b><small>Sync2Cal, Google, webcal://…</small></span></button>
       <button class="choice" disabled><span class="ic">${ICON.camera}</span><span><b>Depuis une capture d'écran<span class="badge">BIENTÔT</span></b><small>Extraire l'événement d'une image</small></span></button>
     </div>`, (sh) => {
     sh.querySelector('[data-close]').onclick = closeSheet;
     sh.querySelector('[data-c="manual"]').onclick = () => openEventForm();
-    sh.querySelector('[data-c="source"]').onclick = () => openSourceForm();
   });
 }
 
