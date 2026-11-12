@@ -219,6 +219,12 @@ a { color: inherit; text-underline-offset: 3px; }
 .sheet-head h3 { margin: 0; font-family: var(--serif); font-weight: 400; font-size: var(--t-3); letter-spacing: -.02em; }
 .sheet-head button { padding: var(--e-1) 0; border: 0; background: none; color: var(--texte); font-size: var(--t-2); }
 .sheet-head button b { font-weight: 600; }
+/* Fiche ouverte depuis une ligne à flèche : une page entière qui glisse depuis la droite */
+.sheet.page { top: 0; max-height: none; height: 100dvh; padding-top: calc(var(--safe-top) + var(--e-3)); border-radius: 0;
+  background: rgba(250, 248, 243, .96); animation: glisse .32s cubic-bezier(.22, 1, .36, 1); }
+@media (min-width: 640px) { .sheet.page { top: var(--e-3); bottom: var(--e-3); height: auto; border-radius: var(--r); } }
+.sheet.page .sheet-head h3 { flex: 1; text-align: center; }
+@keyframes glisse { from { transform: translateX(100%); } }
 @keyframes up { from { transform: translateY(100%); } }
 @keyframes fade { from { opacity: 0; } }
 
@@ -233,7 +239,7 @@ a { color: inherit; text-underline-offset: 3px; }
 
 .field { position: relative; display: block; padding: 10px var(--e-3); }
 .field + .field::before, .field + .toggle::before, .toggle + .field::before, .row + .field::before, .pair + .pair::before,
-.toggle + .pair::before, .pair + .toggle::before {
+.toggle + .pair::before, .pair + .toggle::before, .toggle + .toggle::before {
   content: ""; position: absolute; top: 0; left: var(--e-3); right: 0; border-top: 1px solid var(--bordure); }
 .pair { position: relative; display: grid; grid-template-columns: 1fr 1fr; }
 .pair .field + .field::before { display: none; }

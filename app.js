@@ -244,7 +244,7 @@ async function syncNow(ids, { quietOk = false } = {}) {
 }
 
 function openSyncTokenSheet(retry) {
-  openSheet(`<div class="sheet-head"><button data-close>Plus tard</button><h3>Synchro immédiate</h3><span style="width:60px"></span></div>
+  (retry ? openSheet : openPage)(`<div class="sheet-head"><button data-close>Plus tard</button><h3>Synchro immédiate</h3><span style="width:60px"></span></div>
     <p class="note" style="margin-top:0">Lit un agenda dès son ajout. Nécessite un second jeton GitHub, limité à ce seul droit.</p>
     <ol class="steps card">
       <li><a href="https://github.com/settings/personal-access-tokens/new?name=Radar%20synchro&description=Lancer%20la%20synchro%20Radar&expires_in=none&actions=write" target="_blank" rel="noopener">Créer un jeton « fine-grained »</a>, nommé « Radar synchro », avec l'expiration la plus longue proposée.</li>
@@ -511,13 +511,17 @@ function logout() {
 }
 
 /* ---------- Feuilles ---------- */
-function openSheet(html, onMount) {
+function openSheet(html, onMount, { page = false } = {}) {
   const sh = $('#sheet');
-  sh.innerHTML = `<div class="grab"></div>${html}`;
-  sh.hidden = false; $('#scrim').hidden = false; document.body.style.overflow = 'hidden';
+  sh.classList.toggle('page', page);
+  sh.innerHTML = `${page ? '' : '<div class="grab"></div>'}${html}`;
+  if (page) { const back = sh.querySelector('.sheet-head [data-close]'); if (back) back.innerHTML = '‹ Retour'; }
+  sh.hidden = false; $('#scrim').hidden = page; document.body.style.overflow = 'hidden';
   sh.scrollTop = 0;
   onMount && onMount(sh);
 }
+/** Fiche ouverte depuis une ligne à flèche : une page qui glisse depuis la droite, avec « ‹ Retour ». */
+const openPage = (html, onMount) => openSheet(html, onMount, { page: true });
 function closeSheet() {
   $('#sheet').hidden = true; $('#scrim').hidden = true; document.body.style.overflow = '';
 }
@@ -657,7 +661,7 @@ function openDetail(ev) {
 
 function openSourceForm(existing) {
   let category = existing ? existing.category || null : null;
-  openSheet(`<div class="sheet-head"><button data-close>Annuler</button><h3>${existing ? 'Calendrier' : 'Lier un calendrier'}</h3><button data-save><b>${existing ? 'OK' : 'Ajouter'}</b></button></div>
+  (existing ? openPage : openSheet)(`<div class="sheet-head"><button data-close>Annuler</button><h3>${existing ? 'Calendrier' : 'Lier un calendrier'}</h3><button data-save><b>${existing ? 'OK' : 'Ajouter'}</b></button></div>
     <div class="card">
       <label class="field"><span>Lien du calendrier (.ics ou webcal://)</span><input name="url" type="url" value="${esc(existing?.url)}" placeholder="https://…/calendar.ics" autocapitalize="off" spellcheck="false"></label>
       <label class="field"><span>Nom</span><input name="name" value="${esc(existing?.name)}" placeholder="Ex. : Ligue 1, Concerts…"></label>
@@ -716,7 +720,7 @@ function openCatForm(existing) {
   const used = new Set(cats().map((c) => c.color));
   let color = existing?.color || COLORS.find((c) => !used.has(c)) || COLORS[0];
   let icon = existing ? artOf(existing) : 'etoile';
-  openSheet(`<div class="sheet-head"><button data-close>Annuler</button><h3>${existing ? 'Rubrique' : 'Nouvelle rubrique'}</h3><button data-save><b>${existing ? 'OK' : 'Ajouter'}</b></button></div>
+  (existing ? openPage : openSheet)(`<div class="sheet-head"><button data-close>Annuler</button><h3>${existing ? 'Rubrique' : 'Nouvelle rubrique'}</h3><button data-save><b>${existing ? 'OK' : 'Ajouter'}</b></button></div>
     <div class="card">
       <label class="field"><span>Nom</span><input name="name" value="${esc(existing?.name)}" placeholder="Ex. : Concert, Expo…" maxlength="30"></label>
       <div class="field"><span>Couleur</span><div class="swatches">${COLORS.map((c) => `<button type="button" data-color="${c}" class="${c === color ? 'on' : ''}" style="background:${c};color:${c}" aria-label="Couleur"></button>`).join('')}</div></div>
