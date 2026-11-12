@@ -314,14 +314,9 @@ async function addSource({ name, url, category, translate = true }) {
 const SUGGESTIONS = [
   { group: 'Football', cat: 'sport', items: [
     ['OM', 'https://matchcalendar.football/team/marseille/marseille.ics'],
-    ['PSG', 'https://matchcalendar.football/team/paris-saint-germain/paris-saint-germain.ics'],
-    ['Ligue 1', 'https://matchcalendar.football/competition/ligue-1/ligue-1.ics'],
     ['Ligue des champions', 'https://matchcalendar.football/competition/champions-league/champions-league.ics'],
-    ['Ligue Europa', 'https://matchcalendar.football/competition/uefa-europa-league/uefa-europa-league.ics'],
     ['Équipe de France', 'https://matchcalendar.football/team/france/france.ics'],
-    ['Équipe de France féminine', 'https://ics.fixtur.es/v2/fr-women.ics'],
     ['Real Madrid', 'https://matchcalendar.football/team/real-madrid/real-madrid.ics'],
-    ['Liverpool', 'https://matchcalendar.football/team/liverpool/liverpool.ics'],
   ] },
   { group: 'Séries', cat: 'serie', items: [
     ['Netflix', 'https://www.smartcalendars.ai/cal/4fc097ff8c48803f38c6272953b5c349e4669652cc4686e154ecc61a7b7d968f.ics'],
