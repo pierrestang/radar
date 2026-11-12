@@ -87,7 +87,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .art-picker .mini { width: 26px; height: 26px; stroke-width: 6; }
 
 /* ---------- Recherche & filtres ---------- */
-.search { position: relative; margin-bottom: 10px; }
+.search { position: relative; margin-bottom: 18px; }
 .search input {
   width: 100%; border: 0; border-radius: 12px; padding: 11px 12px 11px 38px; background: var(--surface-2);
   font-size: 16px; outline: none;
@@ -158,9 +158,6 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .btn.danger { background: transparent; color: var(--danger); }
 .btn:disabled { opacity: .45; }
 .btns { display: grid; gap: 10px; margin-top: 16px; }
-.btn-row { display: grid; grid-template-columns: 52px 1fr; gap: 10px; margin-top: 16px; }
-.btn.plus { padding: 0; }
-.btn.plus svg { width: 22px; height: 22px; stroke-width: 2.4; }
 .inline-btn { border: 0; background: none; color: var(--accent); font-weight: 600; padding: 4px 0; }
 
 /* ---------- Barre d'onglets & bouton + ---------- */
@@ -255,3 +252,9 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .sync-pill { display: inline-flex; align-items: center; gap: 6px; }
 .sync-pill i { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
 .sync-pill.off i { background: var(--faint); }
+
+.head-btns { display: flex; gap: 10px; flex: none; }
+.iconbtn:disabled { opacity: .6; }
+.count-pill { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; margin-left: 6px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 700; letter-spacing: 0; vertical-align: 1px; }
+.url-row { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; }
+.url-row .url-box { flex: 1; min-width: 0; margin-bottom: 0; }

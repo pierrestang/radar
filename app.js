@@ -245,7 +245,7 @@ async function syncNow(ids, { quietOk = false } = {}) {
 
 function openSyncTokenSheet(retry) {
   openSheet(`<div class="sheet-head"><button data-close>Plus tard</button><h3>Synchro immédiate</h3><span style="width:60px"></span></div>
-    <p class="note" style="margin-top:0">Pour lire un agenda dès son ajout, Radar doit pouvoir lancer la synchro sur GitHub. Ton jeton actuel ne sert qu'au stockage : il faut un second jeton, limité à ce seul droit.</p>
+    <p class="note" style="margin-top:0">Lit un agenda dès son ajout. Nécessite un second jeton GitHub, limité à ce seul droit.</p>
     <ol class="steps card">
       <li><a href="https://github.com/settings/personal-access-tokens/new?name=Radar%20synchro&description=Lancer%20la%20synchro%20Radar&expires_in=none&actions=write" target="_blank" rel="noopener">Créer un jeton « fine-grained »</a>, nommé « Radar synchro », avec l'expiration la plus longue proposée.</li>
       <li><b>Repository access</b> : « Only select repositories » › <b>radar</b>.</li>
@@ -279,7 +279,7 @@ function render() {
   const app = $('#app');
   const connected = S.token && S.gistId;
   $('#tabbar').hidden = !connected;
-  $('#fab').hidden = !connected || S.tab === 'share';
+  $('#fab').hidden = !connected || S.tab !== 'agenda';
   document.querySelectorAll('#tabbar button').forEach((b) => b.classList.toggle('on', b.dataset.tab === S.tab));
   if (!connected) { app.innerHTML = viewSetup(); bindSetup(); return; }
   if (S.tab === 'sources') app.innerHTML = viewSources();
@@ -288,9 +288,9 @@ function render() {
   bindView();
 }
 
-function header(title, sub) {
+function header(title, sub, buttons) {
   return `<header class="head"><div><h1>${esc(title)}</h1>${sub ? `<div class="sub">${sub}</div>` : ''}</div>
-    <button class="iconbtn ${S.loading ? 'spin' : ''}" data-act="reload" aria-label="Actualiser">${ICON.refresh}</button></header>`;
+    ${buttons || `<button class="iconbtn ${S.loading ? 'spin' : ''}" data-act="reload" aria-label="Actualiser">${ICON.refresh}</button>`}</header>`;
 }
 
 function allEvents() { return mergedEvents(S.config, S.remote); }
@@ -308,9 +308,9 @@ function viewAgenda() {
   }
   const upcoming = evs.filter((e) => evEndMs(e) > now);
   const nextEv = !S.query && upcoming.find((e) => !e.allDay || e.start >= localDateKey(new Date()));
-  const sub = `<span class="sync-pill ${S.lastLoad ? '' : 'off'}"><i></i>${upcoming.length} à venir · ${S.loading ? 'actualisation…' : 'à jour ' + ago(S.lastLoad)}</span>`;
+  const sub = `<span class="sync-pill ${S.lastLoad ? '' : 'off'}"><i></i>${S.loading ? 'Actualisation…' : 'À jour ' + ago(S.lastLoad)}</span>`;
 
-  let html = header('Radar', sub);
+  let html = header('Agenda', sub);
 
   if (nextEv) {
     const c = countdown(nextEv);
@@ -372,9 +372,11 @@ function viewAgenda() {
 
 function viewSources() {
   const srcs = S.config.sources || [];
-  const manualCount = (S.config.manual || []).length;
-  let html = header('Sources', `${srcs.length} calendrier${srcs.length > 1 ? 's' : ''} lié${srcs.length > 1 ? 's' : ''} · ${manualCount} ajout${manualCount > 1 ? 's' : ''} manuel${manualCount > 1 ? 's' : ''}`);
-  html += `<div class="section-title">Calendriers liés</div>`;
+  const busy = Object.keys(S.syncing).length > 0;
+  let html = header('Sources', '', `<div class="head-btns">
+    <button class="iconbtn" data-act="add-source" aria-label="Ajouter un calendrier" title="Ajouter un calendrier"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+    <button class="iconbtn ${busy ? 'spin' : ''}" data-act="sync-all" ${busy ? 'disabled' : ''} aria-label="Synchroniser" title="Synchroniser">${ICON.refresh}</button></div>`);
+  html += `<div class="section-title">Calendriers liés${srcs.length ? ` <span class="count-pill">${srcs.length}</span>` : ''}</div>`;
   if (!srcs.length) {
     html += `<div class="card"><button class="row" data-act="add-source"><div class="grow"><div class="name">Coller un lien de calendrier</div><div class="info">Sync2Cal, Google Agenda, club de sport, billetterie…</div></div>${ICON.chev}</button></div>`;
   } else {
@@ -390,9 +392,7 @@ function viewSources() {
       if (sc && !S.syncing[s.id]) info = `${sc.name} · ${info}`;
       return `<button class="row" data-src="${esc(s.id)}"><span class="dot" style="background:${esc(sc ? sc.color : 'var(--faint)')};width:12px;height:12px"></span>
         <div class="grow"><div class="name">${esc(s.name)}</div><div class="info ${cls}">${esc(info)}</div></div>${ICON.chev}</button>`;
-    }).join('')}</div>
-    <div class="btn-row"><button class="btn ghost plus" data-act="add-source" aria-label="Ajouter un calendrier" title="Ajouter un calendrier"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
-      <button class="btn ghost" data-act="sync-all" ${Object.keys(S.syncing).length ? 'disabled' : ''}>${ICON.refresh} ${Object.keys(S.syncing).length ? 'Synchronisation…' : 'Synchroniser'}</button></div>`;
+    }).join('')}</div>`;
   }
   html += `<p class="note">Chaque agenda est lu dès son ajout, puis relu automatiquement toutes les ${SYNC_EVERY} environ. Les liens <b>webcal://</b> sont acceptés.</p>`;
 
@@ -401,8 +401,7 @@ function viewSources() {
     const n = all.filter((e) => e.category === c.id).length;
     return `<button class="row" data-catedit="${esc(c.id)}"><span class="dot" style="background:${esc(c.color)};width:12px;height:12px"></span>
       <div class="grow"><div class="name">${esc(c.name)}</div><div class="info">${n} événement${n > 1 ? 's' : ''}</div></div>${ICON.chev}</button>`;
-  }).join('')}<button class="row" data-act="add-cat"><div class="grow"><div class="name" style="color:var(--accent)">Nouvelle rubrique</div></div></button></div>
-  <p class="note">La rubrique d'un calendrier lié s'applique à tous ses événements ; tu peux la changer pour un événement précis depuis sa fiche.</p>`;
+  }).join('')}<button class="row" data-act="add-cat"><div class="grow"><div class="name" style="color:var(--accent)">Nouvelle rubrique</div></div></button></div>`;
   html += `<div class="section-title">Autres entrées</div><div class="card">
     <div class="row" style="opacity:.55"><div class="grow"><div class="name">Capture d'écran <span class="badge">BIENTÔT</span></div><div class="info">Lire une affiche ou un billet pour en extraire l'événement</div></div></div>
   </div>`;
@@ -414,19 +413,16 @@ function viewShare() {
   let html = header('Abonnement', 'Suivre Radar dans tes agendas');
   html += `<div class="section-title">Google Agenda</div>
     <div class="card"><div class="row"><span class="dot" style="width:12px;height:12px"></span>
-      <div class="grow"><div class="name">Connecté</div><div class="info">L'agenda « Radar » de ton compte Google est mis à jour automatiquement, en général en moins d'une minute, avec la couleur de chaque rubrique. Il suit ton compte Google partout, iPhone compris.</div></div></div></div>
-    <div class="section-title">Lien .ics (autres applications)</div>
-    <div class="url-box" id="icsurl">${esc(url || 'Lien disponible après la première synchro…')}</div>
-    <div class="btns" style="margin-top:0">
-      <button class="btn ghost" data-act="copy">${ICON.copy} Copier le lien</button>
-    </div>
-    <p class="note">Pour s'abonner à Radar depuis une autre application (Outlook, Calendrier Apple…). Inutile pour Google Agenda, déjà connecté. Garde ce lien pour toi : toute personne qui l'a peut voir ton agenda.</p>`;
+      <div class="grow"><div class="name">Connecté</div><div class="info">Mis à jour automatiquement en moins d'une minute.</div></div></div></div>
+    <div class="section-title">Lien</div>
+    <div class="url-row"><div class="url-box" id="icsurl">${esc(url || 'Lien disponible après la première synchro…')}</div>
+      <button class="iconbtn" data-act="copy" aria-label="Copier le lien" title="Copier le lien">${ICON.copy}</button></div>`;
 
   html += `<div class="section-title">Réglages</div><div class="card">
     <label class="field"><span>Nom du calendrier</span><input id="calname" value="${esc(S.config.calendarName || 'Radar')}" maxlength="60"></label>
   </div>
   <div class="card" style="margin-top:12px">
-    <button class="row" data-act="sync-token"><div class="grow"><div class="name">Synchro immédiate</div><div class="info">${S.syncToken ? 'Activée' : 'À activer : lire un agenda dès son ajout'}</div></div>${ICON.chev}</button>
+    <button class="row" data-act="sync-token"><div class="grow"><div class="name">Synchro immédiate</div><div class="info">${S.syncToken ? 'Activée' : 'Désactivée'}</div></div>${ICON.chev}</button>
   </div>
   <div class="card" style="margin-top:12px">
     <button class="row" data-act="logout"><div class="grow"><div class="name" style="color:var(--danger)">Déconnecter cet appareil</div><div class="info">Tes données restent dans ton Gist GitHub.</div></div></button>
@@ -500,7 +496,7 @@ document.addEventListener('click', (e) => {
   else if (a === 'gcal') { const w = window.open('https://calendar.google.com/calendar/u/0/r/settings/addbyurl', '_blank', 'noopener'); copyUrl(true); if (!w) location.href = 'https://calendar.google.com/calendar/u/0/r/settings/addbyurl'; }
   else if (a === 'logout') logout();
 });
-$('#fab').onclick = () => openAddMenu();
+$('#fab').onclick = () => openEventForm();
 $('#scrim').onclick = () => closeSheet();
 
 async function copyUrl(forGoogle = false) {
