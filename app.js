@@ -338,22 +338,26 @@ function eventRow(e, now = Date.now(), withDay = false) {
     <div><div class="title">${esc(e.title)}</div>${meta ? `<div class="meta">${meta}</div>` : ''}</div></button>`;
 }
 
-/** Accueil : les 3 prochains événements (le premier en grand), rien d'autre. */
+/** Accueil : les événements du jour, complétés par les suivants (au moins 3), le prochain en grand. */
 function viewHome() {
   const now = Date.now();
   const todayKey = localDateKey(new Date());
   const evs = allEvents().filter((e) => evEndMs(e) > now);
   let html = '';
-  const nextEv = evs.find((e) => evStartLocalMs(e) > now) || evs[0];
-  if (!nextEv) {
+  // Les événements du jour (en cours ou à venir), complétés par les suivants pour en avoir au moins 3.
+  const isToday = (e) => (e.allDay ? e.start <= todayKey : localDateKey(new Date(e.start)) <= todayKey);
+  const items = evs.filter(isToday);
+  for (const e of evs) { if (items.length >= 3) break; if (!items.includes(e)) items.push(e); }
+  if (!items.length) {
     return html + `<div class="empty">${ICON.radar}<h3>Rien sur le radar</h3><p>Ajoute un événement ou lie un calendrier.</p></div>`;
   }
+  // en grand : le prochain qui n'a pas encore commencé (sinon le premier)
+  const nextEv = items.find((e) => evStartLocalMs(e) > now) || items[0];
   html += nextCard(nextEv);
-  // les deux suivants : 3 prochains événements en tout, avec leur jour
-  const after = evs.filter((e) => e !== nextEv && evStartLocalMs(e) >= evStartLocalMs(nextEv)).slice(0, 2);
-  if (after.length) {
-    html += `<section class="day"><h2>Ensuite</h2><div class="card">${after.map((e) => eventRow(e, now, true)).join('')}</div></section>`;
-  }
+  const rest = items.filter((e) => e !== nextEv);
+  const today = rest.filter(isToday), later = rest.filter((e) => !isToday(e));
+  if (today.length) html += `<section class="day"><h2 class="today">Aujourd'hui</h2><div class="card">${today.map((e) => eventRow(e, now)).join('')}</div></section>`;
+  if (later.length) html += `<section class="day"><h2>Ensuite</h2><div class="card">${later.map((e) => eventRow(e, now, true)).join('')}</div></section>`;
   return html;
 }
 
