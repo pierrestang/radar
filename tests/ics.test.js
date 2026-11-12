@@ -96,8 +96,9 @@ test('traduction des matchs en français', () => {
   assert.equal(frenchify({ title: 'x', notes: 'Referee: Clement Turpin' }).notes, undefined);
   assert.equal(frNotes('UEFA Europa League - League Stage - 2\nHalf-time 0-1'), 'Ligue Europa · Phase de ligue · Journée 2\nMi-temps : 0-1');
   assert.equal(frNotes('Ligue 1 - Round 12'), 'Ligue 1 · Journée 12');
-  assert.equal(frLocation('Decathlon Arena - Stade Pierre-Mauroy, Villeneuve d&apos;Ascq'), "Decathlon Arena - Stade Pierre-Mauroy, Villeneuve d'Ascq");
-  assert.equal(frLocation('Wembley Stadium, London'), 'Wembley Stadium, Londres');
+  assert.equal(frLocation('Decathlon Arena - Stade Pierre-Mauroy, Villeneuve d&apos;Ascq'), 'Decathlon Arena - Stade Pierre-Mauroy');
+  assert.equal(frLocation('San Siro/Giuseppe Meazza, Milan'), 'San Siro/Giuseppe Meazza');
+  assert.equal(frLocation('Wembley Stadium, London'), 'Wembley Stadium');
 });
 
 test('rubriques : défaut du calendrier, exception par événement, pas de source dans le .ics', () => {

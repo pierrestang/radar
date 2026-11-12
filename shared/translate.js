@@ -164,8 +164,8 @@ export function frLocation(loc) {
   const s = decode(loc).trim();
   const i = s.lastIndexOf(',');
   if (i < 0) return CITIES[s] || s;
-  const city = s.slice(i + 1).trim();
-  return `${s.slice(0, i)}, ${CITIES[city] || city}`;
+  // « Stade, Ville » → on ne garde que le stade
+  return s.slice(0, i).trim();
 }
 
 /** Renvoie une copie francisée d'un événement de flux. */
