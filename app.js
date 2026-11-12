@@ -342,8 +342,7 @@ function viewHome() {
   const now = Date.now();
   const todayKey = localDateKey(new Date());
   const evs = allEvents().filter((e) => evEndMs(e) > now);
-  const sub = `<span class="sync-pill ${S.lastLoad ? '' : 'off'}"><i></i>${S.loading ? 'Actualisation…' : 'À jour ' + ago(S.lastLoad)}</span>`;
-  let html = header('Accueil', sub);
+  let html = '';
   const nextEv = evs.find((e) => evStartLocalMs(e) > now) || evs[0];
   if (!nextEv) {
     return html + `<div class="empty">${ICON.radar}<h3>Rien sur le radar</h3><p>Ajoute un événement ou lie un calendrier.</p></div>`;
