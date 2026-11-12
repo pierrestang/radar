@@ -391,8 +391,8 @@ function viewSources() {
       return `<button class="row" data-src="${esc(s.id)}"><span class="dot" style="background:${esc(sc ? sc.color : 'var(--faint)')};width:12px;height:12px"></span>
         <div class="grow"><div class="name">${esc(s.name)}</div><div class="info ${cls}">${esc(info)}</div></div>${ICON.chev}</button>`;
     }).join('')}</div>
-    <div class="btns"><button class="btn ghost" data-act="add-source">${ICON.link} Ajouter un calendrier</button>
-      <button class="btn ghost" data-act="sync-all" ${Object.keys(S.syncing).length ? 'disabled' : ''}>${ICON.refresh} ${Object.keys(S.syncing).length ? 'Synchronisation…' : 'Synchroniser maintenant'}</button></div>`;
+    <div class="btn-row"><button class="btn ghost plus" data-act="add-source" aria-label="Ajouter un calendrier" title="Ajouter un calendrier"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+      <button class="btn ghost" data-act="sync-all" ${Object.keys(S.syncing).length ? 'disabled' : ''}>${ICON.refresh} ${Object.keys(S.syncing).length ? 'Synchronisation…' : 'Synchroniser'}</button></div>`;
   }
   html += `<p class="note">Chaque agenda est lu dès son ajout, puis relu automatiquement toutes les ${SYNC_EVERY} environ. Les liens <b>webcal://</b> sont acceptés.</p>`;
 
