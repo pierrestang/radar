@@ -328,17 +328,17 @@ function nextCard(ev) {
     <div class="w">${esc(dayLabel(evDayKey(ev)))}${ev.allDay ? '' : ' · ' + fmtTime(ev.start)}${ev.location ? ' · ' + esc(ev.location) : ''}</div>
     <div class="count"><b>${c.n}</b><span>${c.u}</span></div></button>`;
 }
-function eventRow(e, now = Date.now()) {
+function eventRow(e, now = Date.now(), withDay = false) {
   const past = evEndMs(e) <= now;
   const time = e.allDay ? `<div class="time">Jour<small>entier</small></div>`
     : `<div class="time">${fmtTime(e.start)}${e.end && e.end !== e.start ? `<small>${fmtTime(e.end)}</small>` : ''}</div>`;
-  const meta = e.location ? `<span>${esc(e.location)}</span>` : '';
+  const meta = [withDay && `<span>${esc(dayLabel(evDayKey(e)))}</span>`, e.location && `<span>${esc(e.location)}</span>`].filter(Boolean).join('');
   return `<button class="ev ${past ? 'past' : ''}" data-ev="${esc(e.icsUid)}">${time}
     <div class="bar" style="background:${esc(e.color || 'var(--faint)')}"></div>
     <div><div class="title">${esc(e.title)}</div>${meta ? `<div class="meta">${meta}</div>` : ''}</div></button>`;
 }
 
-/** Accueil : le prochain événement et ceux du jour, rien d'autre. */
+/** Accueil : les 3 prochains événements (le premier en grand), rien d'autre. */
 function viewHome() {
   const now = Date.now();
   const todayKey = localDateKey(new Date());
@@ -349,9 +349,10 @@ function viewHome() {
     return html + `<div class="empty">${ICON.radar}<h3>Rien sur le radar</h3><p>Ajoute un événement ou lie un calendrier.</p></div>`;
   }
   html += nextCard(nextEv);
-  const today = evs.filter((e) => e !== nextEv && (e.allDay ? e.start <= todayKey : localDateKey(new Date(e.start)) <= todayKey));
-  if (today.length) {
-    html += `<section class="day"><h2 class="today">Aujourd'hui</h2><div class="card">${today.map((e) => eventRow(e, now)).join('')}</div></section>`;
+  // les deux suivants : 3 prochains événements en tout, avec leur jour
+  const after = evs.filter((e) => e !== nextEv && evStartLocalMs(e) >= evStartLocalMs(nextEv)).slice(0, 2);
+  if (after.length) {
+    html += `<section class="day"><h2>Ensuite</h2><div class="card">${after.map((e) => eventRow(e, now, true)).join('')}</div></section>`;
   }
   return html;
 }
