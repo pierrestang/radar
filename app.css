@@ -263,3 +263,4 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .section-head .section-title { margin: 0; }
 .iconbtn.sm { width: 32px; height: 32px; }
 .iconbtn.sm svg { width: 17px; height: 17px; }
+.row + .field::before { content: ""; position: absolute; top: 0; left: 14px; right: 0; border-top: 1px solid var(--line); }

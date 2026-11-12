@@ -402,7 +402,7 @@ function viewSources() {
 
   // 2. Organisation : rubriques
   const all = allEvents();
-  html += `<div class="section-title">Rubriques</div><div class="card">${cats().map((c) => {
+  html += `<div class="section-title">Rubriques <span class="count-pill">${cats().length}</span></div><div class="card">${cats().map((c) => {
     const n = all.filter((e) => e.category === c.id).length;
     return `<button class="row" data-catedit="${esc(c.id)}"><span class="dot" style="background:${esc(c.color)};width:12px;height:12px"></span>
       <div class="grow"><div class="name">${esc(c.name)}</div><div class="info">${n} événement${n > 1 ? 's' : ''}</div></div>${ICON.chev}</button>`;
