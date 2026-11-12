@@ -404,7 +404,6 @@ function viewSources() {
   }).join('')}<button class="row" data-act="add-cat"><div class="grow"><div class="name" style="color:var(--accent)">Nouvelle rubrique</div></div></button></div>
   <p class="note">La rubrique d'un calendrier lié s'applique à tous ses événements ; tu peux la changer pour un événement précis depuis sa fiche.</p>`;
   html += `<div class="section-title">Autres entrées</div><div class="card">
-    <button class="row" data-act="add-manual"><div class="grow"><div class="name">Saisie manuelle</div><div class="info">${manualCount} événement${manualCount > 1 ? 's' : ''}</div></div>${ICON.chev}</button>
     <div class="row" style="opacity:.55"><div class="grow"><div class="name">Capture d'écran <span class="badge">BIENTÔT</span></div><div class="info">Lire une affiche ou un billet pour en extraire l'événement</div></div></div>
   </div>`;
   return html;
@@ -501,7 +500,7 @@ document.addEventListener('click', (e) => {
   else if (a === 'gcal') { const w = window.open('https://calendar.google.com/calendar/u/0/r/settings/addbyurl', '_blank', 'noopener'); copyUrl(true); if (!w) location.href = 'https://calendar.google.com/calendar/u/0/r/settings/addbyurl'; }
   else if (a === 'logout') logout();
 });
-$('#fab').onclick = () => (S.tab === 'sources' ? openSourceForm() : openAddMenu());
+$('#fab').onclick = () => openAddMenu();
 $('#scrim').onclick = () => closeSheet();
 
 async function copyUrl(forGoogle = false) {
