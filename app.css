@@ -331,3 +331,6 @@ body > canvas + .tabbar { margin-top: calc(var(--safe-top) + var(--e-3)); }
 .badge-ok i { width: 7px; height: 7px; border-radius: 50%; background: var(--succes); }
 #app > .card + .section-title { margin-top: var(--e-3); }
 .card:has(> .ev, > .row, > .choice) > *::before { display: none; }
+.url-line { display: flex; align-items: center; gap: var(--e-2); }
+.url-text { flex: 1; min-width: 0; color: var(--discret); font: 12px/1.45 ui-monospace, "SF Mono", Menlo, monospace; word-break: break-all; user-select: all; }
+#app > .card + .card { margin-top: var(--e-2); }

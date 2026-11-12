@@ -463,9 +463,9 @@ function viewSettings() {
     <div class="card"><div class="row"><div class="grow"><div class="name">Google Agenda</div></div>
       <span class="badge-ok"><i></i>Connecté</span></div>
     <label class="field"><span>Nom du calendrier</span><input id="calname" value="${esc(S.config.calendarName || 'Radar')}" maxlength="60"></label></div>
-    <div class="section-title">URL de l'agenda</div>
-    <div class="url-row"><div class="url-box" id="icsurl">${esc(url || 'Lien disponible après la première synchro…')}</div>
-      <button class="iconbtn" data-act="copy" aria-label="Copier le lien" title="Copier le lien">${ICON.copy}</button></div>`;
+    <div class="card"><div class="field"><span>URL de l'agenda</span>
+      <div class="url-line"><div class="url-text" id="icsurl">${esc(url || 'Lien disponible après la première synchro…')}</div>
+      <button class="iconbtn sm" data-act="copy" aria-label="Copier le lien" title="Copier le lien">${ICON.copy}</button></div></div></div>`;
 
   // Compte
   html += `<div class="section-title">Compte</div><div class="card">
