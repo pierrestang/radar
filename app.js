@@ -294,7 +294,7 @@ function render() {
   const app = $('#app');
   const connected = S.token && S.gistId;
   $('#tabbar').hidden = !connected;
-  $('#fab').hidden = !connected || S.tab !== 'agenda';
+  $('#fab').hidden = true; // le « + » est dans l'en-tête de l'Agenda, comme dans Sources et Réglages
   document.querySelectorAll('#tabbar button').forEach((b) => b.classList.toggle('on', b.dataset.tab === S.tab));
   // Comme dans Fantôme : sur l'Accueil, le menu en haut puis le grand titre ; ailleurs, le titre
   // plus petit au-dessus du menu. Pendant un changement d'onglet, la transition fait glisser l'un et l'autre.
@@ -369,7 +369,9 @@ function viewAgenda() {
   const upcoming = evs.filter((e) => evEndMs(e) > now);
   const sub = `<span class="sync-pill ${S.lastLoad ? '' : 'off'}"><i></i>${S.loading ? 'Actualisation…' : 'À jour ' + ago(S.lastLoad)}</span>`;
 
-  let html = header('Agenda', sub);
+  let html = header('Agenda', sub, `<div class="head-btns">
+    <button class="iconbtn sm" data-act="add" aria-label="Ajouter" title="Ajouter"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+    <button class="iconbtn sm ${S.loading ? 'spin' : ''}" data-act="reload" aria-label="Actualiser" title="Actualiser">${ICON.refresh}</button></div>`);
 
 
   if (allEvents().length || S.query) {
