@@ -14,6 +14,7 @@ App : https://pierrestang.github.io/radar/
 |---|---|
 | GitHub Pages (ce dépôt) | l'app (PWA statique, sans données) |
 | Gist secret « Radar — données » | `config.json` (sources, ajouts manuels, masqués) · `remote.json` (événements des flux) · `radar.ics` (calendrier fusionné publié) |
+| Script Google Apps Script (compte Google) | chaque minute : lit `google.json` et met à jour l'agenda Google « Radar » (couleur = rubrique) — code dans `google/Code.gs` |
 | GitHub Actions `sync.yml` | lancée par l'app dès qu'un agenda est ajouté (ou modifié), et toutes les ~30 min : relit chaque flux, met à jour `remote.json` et `radar.ics` |
 
 L'app écrit `config.json` et régénère `radar.ics` immédiatement ; la synchro écrit `remote.json` et `radar.ics`. Le lien d'abonnement est l'URL « raw » du Gist (`…/raw/radar.ics`, toujours la dernière version).

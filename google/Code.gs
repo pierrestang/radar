@@ -30,10 +30,23 @@ function setup() {
 }
 
 /** Lancé chaque minute par le déclencheur. */
+/** Lit google.json : API GitHub d'abord (toujours à jour), sinon lien raw (cache de 5 min). */
+function fetchBody_() {
+  const m = SOURCE.match(/gist\.githubusercontent\.com\/[^/]+\/([0-9a-f]+)\//);
+  if (m) {
+    const api = UrlFetchApp.fetch('https://api.github.com/gists/' + m[1], { muteHttpExceptions: true, headers: { Accept: 'application/vnd.github+json' } });
+    if (api.getResponseCode() === 200) {
+      const f = JSON.parse(api.getContentText()).files['google.json'];
+      if (f && !f.truncated) return JSON.parse(f.content);
+    }
+  }
+  const res = UrlFetchApp.fetch(SOURCE, { muteHttpExceptions: true });
+  if (res.getResponseCode() !== 200) throw new Error('HTTP ' + res.getResponseCode());
+  return JSON.parse(res.getContentText());
+}
+
 function pull() {
-  const res = UrlFetchApp.fetch(SOURCE + '?t=' + Date.now(), { muteHttpExceptions: true, headers: { 'Cache-Control': 'no-cache' } });
-  if (res.getResponseCode() !== 200) return { error: 'HTTP ' + res.getResponseCode() };
-  const body = JSON.parse(res.getContentText());
+  const body = fetchBody_();
   const last = props_().getProperty('BUILT');
   if (last && body.built <= last) return { unchanged: true };
   const lock = LockService.getScriptLock();

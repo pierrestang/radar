@@ -413,15 +413,15 @@ function viewSources() {
 function viewShare() {
   const url = S.icsUrl;
   let html = header('Abonnement', 'Suivre Radar dans tes agendas');
-  html += `<div class="section-title">Lien du calendrier fusionné</div>
+  html += `<div class="section-title">Google Agenda</div>
+    <div class="card"><div class="row"><span class="dot" style="width:12px;height:12px"></span>
+      <div class="grow"><div class="name">Connecté</div><div class="info">L'agenda « Radar » de ton compte Google est mis à jour automatiquement, en général en moins d'une minute, avec la couleur de chaque rubrique. Il suit ton compte Google partout, iPhone compris.</div></div></div></div>
+    <div class="section-title">Lien .ics (autres applications)</div>
     <div class="url-box" id="icsurl">${esc(url || 'Lien disponible après la première synchro…')}</div>
     <div class="btns" style="margin-top:0">
-      <button class="btn" data-act="gcal" ${url ? '' : 'disabled'}>${ICON.google} Ajouter à Google Agenda</button>
       <button class="btn ghost" data-act="copy">${ICON.copy} Copier le lien</button>
     </div>
-    <p class="note"><b>Google Agenda</b> : le bouton copie le lien et ouvre la page « À partir de l'URL » de Google ; colle le lien puis clique sur « Ajouter un agenda ». À faire depuis un ordinateur (l'app Google Agenda pour iPhone ne permet pas d'ajouter un agenda par lien).</p>
-    <p class="note">Une fois ajouté à Google Agenda, Radar suit ton compte Google partout, iPhone compris. Google relit l'agenda à son rythme (souvent quelques heures).</p>
-    <p class="note">Garde ce lien pour toi : toute personne qui l'a peut voir ton agenda.</p>`;
+    <p class="note">Pour s'abonner à Radar depuis une autre application (Outlook, Calendrier Apple…). Inutile pour Google Agenda, déjà connecté. Garde ce lien pour toi : toute personne qui l'a peut voir ton agenda.</p>`;
 
   html += `<div class="section-title">Réglages</div><div class="card">
     <label class="field"><span>Nom du calendrier</span><input id="calname" value="${esc(S.config.calendarName || 'Radar')}" maxlength="60"></label>
