@@ -352,3 +352,9 @@ body > canvas + .tabbar { margin-top: calc(var(--safe-top) + var(--e-3)); }
 #app > .sugg-group + .card { margin-top: var(--e-2); }
 #app > .section-title + .sugg-group { margin-top: var(--e-2) !important; }
 .iconbtn.spin svg { animation: spin 1s linear infinite; }
+
+/* Panneaux d'ajout (événement, calendrier, rubrique…) : affichés en haut, à la place de la carte, et non plus depuis le bas */
+.sheet:not(.page) { top: calc(var(--safe-top) + var(--e-3)); bottom: auto; width: calc(100% - var(--e-4)); max-height: calc(100dvh - var(--safe-top) - var(--e-4));
+  padding: var(--e-3); border-radius: var(--r); animation: descend .3s cubic-bezier(.22, 1, .36, 1); }
+.sheet:not(.page) .grab { display: none; }
+@keyframes descend { from { opacity: 0; transform: translateY(-16px); } }
