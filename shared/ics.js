@@ -264,3 +264,40 @@ export function emptyConfig() {
 export function emptyRemote() {
   return { version: 1, updatedAt: null, sources: {} };
 }
+
+/* ---------- Envoi vers Google Agenda (Apps Script) ---------- */
+
+// Couleurs d'événement Google Agenda (identifiants 1 à 11).
+const GOOGLE_COLORS = {
+  1: '#7986CB', 2: '#33B679', 3: '#8E24AA', 4: '#E67C73', 5: '#F6BF26', 6: '#F4511E',
+  7: '#039BE5', 8: '#616161', 9: '#3F51B5', 10: '#0B8043', 11: '#D50000',
+};
+function rgb(hex) { const h = hex.replace('#', ''); return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)); }
+/** Couleur Google la plus proche d'une couleur de rubrique. */
+export function googleColorId(hex) {
+  if (!/^#[0-9a-f]{6}$/i.test(hex || '')) return null;
+  const [r, g, b] = rgb(hex);
+  let best = null, bestD = Infinity;
+  for (const [id, h] of Object.entries(GOOGLE_COLORS)) {
+    const [r2, g2, b2] = rgb(h);
+    const rm = (r + r2) / 2; // distance « redmean », proche de la perception
+    const d = (2 + rm / 256) * (r - r2) ** 2 + 4 * (g - g2) ** 2 + (2 + (255 - rm) / 256) * (b - b2) ** 2;
+    if (d < bestD) { bestD = d; best = id; }
+  }
+  return best;
+}
+
+export function googlePayload(config, remote, { now = Date.now() } = {}) {
+  const events = mergedEvents(config, remote).map((ev) => {
+    let end = ev.end;
+    if (ev.allDay) { if (!end || end <= ev.start) end = addDays(ev.start, 1); }
+    else if (!end || Date.parse(end) <= Date.parse(ev.start)) end = new Date(Date.parse(ev.start) + 36e5).toISOString();
+    const x = { uid: ev.icsUid, title: ev.title, start: ev.start, end, allDay: !!ev.allDay };
+    if (ev.location) x.location = ev.location;
+    if (ev.notes) x.notes = ev.notes;
+    const c = googleColorId(ev.color);
+    if (c) x.color = c;
+    return x;
+  });
+  return { built: new Date(now).toISOString(), events };
+}

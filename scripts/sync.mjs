@@ -3,7 +3,7 @@
 //         node scripts/sync.mjs --dry <fichier.ics>      (test local d'un flux, sans réseau)
 import ICAL from 'ical.js';
 import { readFileSync } from 'node:fs';
-import { parseICS, buildICS, normalizeUrl, emptyConfig, emptyRemote } from '../shared/ics.js';
+import { parseICS, buildICS, normalizeUrl, emptyConfig, emptyRemote, googlePayload } from '../shared/ics.js';
 import { findGist, readGist, writeGist } from '../shared/gist.js';
 
 const dry = process.argv.indexOf('--dry');
@@ -51,5 +51,6 @@ for (const src of config.sources || []) {
 
 // Relire la config juste avant d'écrire, au cas où elle aurait changé pendant la synchro.
 const fresh = (await readGist(token, id)).config || config;
-await writeGist(token, id, { 'remote.json': next, 'radar.ics': buildICS(fresh, next) });
+await writeGist(token, id, { 'remote.json': next, 'radar.ics': buildICS(fresh, next), 'google.json': googlePayload(fresh, next) });
 console.log(`Terminé : ${ok} flux à jour, ${ko} en erreur.`);
+

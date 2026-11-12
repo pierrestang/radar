@@ -1,5 +1,5 @@
 import ICAL from './vendor/ical.min.js';
-import { parseICS, buildICS, mergedEvents, normalizeUrl, emptyConfig, emptyRemote, startMs, categoriesOf } from './shared/ics.js';
+import { parseICS, buildICS, mergedEvents, normalizeUrl, emptyConfig, emptyRemote, startMs, categoriesOf, googlePayload } from './shared/ics.js';
 import { findGist, readGist, writeGist, createGist, dispatchSync } from './shared/gist.js';
 
 /* ================= État ================= */
@@ -153,7 +153,7 @@ async function load({ quiet = false } = {}) {
     if (LS.get('dirty')) {
       // une modification faite hors ligne n'a pas été envoyée : on la publie maintenant
       const remote = g.remote || S.remote;
-      await writeGist(S.token, S.gistId, { 'config.json': S.config, 'radar.ics': buildICS(S.config, remote) });
+      await writeGist(S.token, S.gistId, { 'config.json': S.config, 'radar.ics': buildICS(S.config, remote), 'google.json': googlePayload(S.config, remote) });
       g.config = S.config; LS.del('dirty');
       toast('Modifications hors ligne envoyées ✓');
     }
@@ -178,7 +178,7 @@ function mutate(fn, okMsg) {
       const cfg = { ...emptyConfig(), ...(g.config || {}) };
       fn(cfg);
       const remote = g.remote || S.remote;
-      await writeGist(S.token, S.gistId, { 'config.json': cfg, 'radar.ics': buildICS(cfg, remote) });
+      await writeGist(S.token, S.gistId, { 'config.json': cfg, 'radar.ics': buildICS(cfg, remote), 'google.json': googlePayload(cfg, remote) });
       S.config = cfg; S.remote = remote; LS.del('dirty'); persist(); render();
       if (okMsg) toast(okMsg);
     } catch (err) {
@@ -206,7 +206,7 @@ async function publishRemoteFor(src, parsed) {
   remote.sources = remote.sources || {};
   remote.sources[src.id] = { fetchedAt: new Date().toISOString(), calName: parsed.calName, error: null, events: parsed.events, via: 'app' };
   const cfg = { ...emptyConfig(), ...(g.config || {}) };
-  await writeGist(S.token, S.gistId, { 'remote.json': remote, 'radar.ics': buildICS(cfg, remote) });
+  await writeGist(S.token, S.gistId, { 'remote.json': remote, 'radar.ics': buildICS(cfg, remote), 'google.json': googlePayload(cfg, remote) });
   S.remote = remote; S.config = cfg; persist(); render();
 }
 
@@ -461,7 +461,7 @@ function bindSetup() {
       let id = await findGist(tok);
       if (!id) {
         const cfg = emptyConfig(), rem = emptyRemote();
-        const g = await createGist(tok, { 'config.json': cfg, 'remote.json': rem, 'radar.ics': buildICS(cfg, rem) });
+        const g = await createGist(tok, { 'config.json': cfg, 'remote.json': rem, 'radar.ics': buildICS(cfg, rem), 'google.json': googlePayload(cfg, rem) });
         id = g.id;
       }
       S.token = tok; S.gistId = id; LS.set('token', tok); LS.set('gistId', id);
