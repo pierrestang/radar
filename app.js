@@ -289,7 +289,7 @@ function render() {
 }
 
 function header(title, sub) {
-  return `<header class="head"><div><h1>${esc(title)}</h1>${sub ? `<div class="sub">${sub}</div>` : ''}</div>
+  return `<header class="head"><div class="head-title"><img class="head-logo" src="icons/logo.png" alt="" width="44" height="44"><div><h1>${esc(title)}</h1>${sub ? `<div class="sub">${sub}</div>` : ''}</div></div>
     <button class="iconbtn ${S.loading ? 'spin' : ''}" data-act="reload" aria-label="Actualiser">${ICON.refresh}</button></header>`;
 }
 
@@ -437,7 +437,7 @@ function viewShare() {
 }
 
 function viewSetup() {
-  return `<div class="hero">${ICON.radar}<h1>Radar</h1><p>Tous tes événements à venir réunis dans un seul agenda, suivi depuis Google Agenda et ton iPhone.</p></div>
+  return `<div class="hero"><img class="logo-img" src="icons/logo.png" alt="" width="112" height="112"><h1>Radar</h1><p>Tous tes événements à venir réunis dans un seul agenda, suivi depuis Google Agenda et ton iPhone.</p></div>
   <div class="section-title">Connexion (une seule fois)</div>
   <ol class="steps card">
     <li><a href="https://github.com/settings/tokens/new?scopes=gist&description=Radar" target="_blank" rel="noopener">Créer un jeton GitHub</a> : laisse uniquement la case <b>gist</b> cochée, choisis « No expiration », puis « Generate token ».</li>
