@@ -758,7 +758,6 @@ function openSourceForm(existing) {
       ${existing ? `<div class="toggle"><span>Afficher dans Radar</span><label class="switch"><input type="checkbox" name="enabled" ${existing.enabled !== false ? 'checked' : ''}><i></i></label></div>` : ''}
     </div>
     <div class="err-msg" data-err hidden></div>
-    ${existing ? '' : `<p class="note">Sur Sync2Cal, ouvre le calendrier voulu puis copie son lien d'abonnement (« Copy link » / iCal). Il est lu tout de suite, puis relu toutes les ${SYNC_EVERY} environ.</p>`}
     ${existing ? `<div class="btns"><button class="btn danger" data-del>Retirer ce calendrier</button></div>` : ''}`, (sh) => {
     const f = (n) => sh.querySelector(`[name="${n}"]`);
     bindCatPicker(sh, (id) => (category = id));
