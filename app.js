@@ -111,7 +111,6 @@ const ICON = {
   camera: '<svg viewBox="0 0 24 24"><path d="M4 8.5A1.5 1.5 0 0 1 5.5 7h2l1.5-2h6l1.5 2h2A1.5 1.5 0 0 1 20 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5v-9Z"/><circle cx="12" cy="13" r="3.5"/></svg>',
   chev: '<svg class="chev" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></svg>',
   google: '<svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="16" rx="3"/><path d="M3.5 9.5h17M8 2.5v4M16 2.5v4M9 15h6M12 12v6"/></svg>',
-  apple: '<svg viewBox="0 0 24 24"><rect x="6" y="2.5" width="12" height="19" rx="3"/><path d="M10.5 18.5h3"/></svg>',
   copy: '<svg viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11" height="11" rx="2.5"/><path d="M15.5 8.5V6A1.5 1.5 0 0 0 14 4.5H6A1.5 1.5 0 0 0 4.5 6v8A1.5 1.5 0 0 0 6 15.5h2.5"/></svg>',
 };
 
@@ -371,17 +370,15 @@ function viewSources() {
 
 function viewShare() {
   const url = S.icsUrl;
-  const webcal = url ? url.replace(/^https:\/\//, 'webcal://') : '';
   let html = header('Abonnement', 'Suivre Radar dans tes agendas');
   html += `<div class="section-title">Lien du calendrier fusionné</div>
     <div class="url-box" id="icsurl">${esc(url || 'Lien disponible après la première synchro…')}</div>
     <div class="btns" style="margin-top:0">
       <button class="btn" data-act="gcal" ${url ? '' : 'disabled'}>${ICON.google} Ajouter à Google Agenda</button>
-      <a class="btn ghost" href="${esc(webcal)}">${ICON.apple} S'abonner sur cet iPhone</a>
       <button class="btn ghost" data-act="copy">${ICON.copy} Copier le lien</button>
     </div>
     <p class="note"><b>Google Agenda</b> : le bouton copie le lien et ouvre la page « À partir de l'URL » de Google ; colle le lien puis clique sur « Ajouter un agenda ». À faire depuis un ordinateur (l'app Google Agenda pour iPhone ne permet pas d'ajouter un agenda par lien).</p>
-    <p class="note">Si tu ajoutes Radar à Google Agenda, il apparaîtra aussi sur ton iPhone via ton compte Google : inutile de t'abonner deux fois. Google relit les agendas abonnés à son rythme (souvent quelques heures) ; l'iPhone peut être réglé dans Réglages › Calendrier › Comptes › Abonnements.</p>
+    <p class="note">Une fois ajouté à Google Agenda, Radar suit ton compte Google partout, iPhone compris. Google relit l'agenda à son rythme (souvent quelques heures).</p>
     <p class="note">Garde ce lien pour toi : toute personne qui l'a peut voir ton agenda.</p>`;
 
   html += `<div class="section-title">Réglages</div><div class="card">
