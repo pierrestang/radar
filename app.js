@@ -368,13 +368,14 @@ function viewAgenda() {
     evs = evs.filter((e) => [e.title, e.location, e.notes, e.categoryName].some((x) => x && x.toLowerCase().includes(q)));
   }
   const upcoming = evs.filter((e) => evEndMs(e) > now);
-  let html = header('Agenda', '', `<div class="head-btns">
-    <button class="iconbtn sm" data-act="add" aria-label="Ajouter" title="Ajouter"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
-    <button class="iconbtn sm ${S.loading || Object.keys(S.syncing).length ? 'spin' : ''}" data-act="refresh-all" ${Object.keys(S.syncing).length ? 'disabled' : ''} aria-label="Synchroniser" title="Synchroniser les sources et l'agenda">${ICON.refresh}</button></div>`);
+  const busy = S.loading || Object.keys(S.syncing).length > 0;
+  let html = `<div class="toolbar"><h1 class="visually-hidden">Agenda</h1><label class="search">${ICON.search}<input id="q" type="search" placeholder="Rechercher" value="${esc(S.query)}" autocomplete="off"></label>
+    <div class="head-btns">
+      <button class="iconbtn" data-act="add" aria-label="Ajouter" title="Ajouter"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+      <button class="iconbtn ${busy ? 'spin' : ''}" data-act="refresh-all" ${Object.keys(S.syncing).length ? 'disabled' : ''} aria-label="Synchroniser" title="Synchroniser les sources et l'agenda">${ICON.refresh}</button>
+    </div></div>`;
 
-
-  if (allEvents().length || S.query) {
-    html += `<label class="search">${ICON.search}<input id="q" type="search" placeholder="Rechercher" value="${esc(S.query)}" autocomplete="off"></label>`;
+  {
     const shownCats = cats().filter((c) => presentCats.has(c.id) || S.filter === c.id);
     if (shownCats.length) {
       html += `<div class="chips">

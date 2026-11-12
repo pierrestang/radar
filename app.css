@@ -334,3 +334,7 @@ body > canvas + .tabbar { margin-top: calc(var(--safe-top) + var(--e-3)); }
 .url-line { display: flex; align-items: center; gap: var(--e-2); }
 .url-text { flex: 1; min-width: 0; color: var(--discret); font: 12px/1.45 ui-monospace, "SF Mono", Menlo, monospace; word-break: break-all; user-select: all; }
 #app > .card + .card { margin-top: var(--e-2); }
+.toolbar { display: flex; align-items: center; gap: var(--e-2); }
+.toolbar .search { flex: 1; min-width: 0; }
+.toolbar .iconbtn { width: 36px; height: 36px; }
+#app > .toolbar + .chips { margin-top: var(--e-2); }
