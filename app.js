@@ -1,5 +1,5 @@
 import ICAL from './vendor/ical.min.js';
-import { parseICS, buildICS, mergedEvents, normalizeUrl, emptyConfig, emptyRemote, startMs } from './shared/ics.js';
+import { parseICS, buildICS, mergedEvents, normalizeUrl, emptyConfig, emptyRemote, startMs, categoriesOf } from './shared/ics.js';
 import { findGist, readGist, writeGist, createGist, dispatchSync } from './shared/gist.js';
 
 /* ================= État ================= */
@@ -113,6 +113,21 @@ const ICON = {
   google: '<svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="16" rx="3"/><path d="M3.5 9.5h17M8 2.5v4M16 2.5v4M9 15h6M12 12v6"/></svg>',
   copy: '<svg viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11" height="11" rx="2.5"/><path d="M15.5 8.5V6A1.5 1.5 0 0 0 14 4.5H6A1.5 1.5 0 0 0 4.5 6v8A1.5 1.5 0 0 0 6 15.5h2.5"/></svg>',
 };
+
+const cats = () => categoriesOf(S.config);
+const catById = (id) => cats().find((c) => c.id === id);
+/** Sélecteur de rubrique (pastilles). */
+function catPicker(selected, { noneLabel = 'Aucune' } = {}) {
+  return `<div class="chips cat-picker" style="margin:0;padding:4px 0 2px;flex-wrap:wrap;overflow:visible">
+    ${cats().map((c) => `<button type="button" class="chip ${selected === c.id ? 'on' : ''}" data-cat="${esc(c.id)}"><span class="dot" style="background:${esc(c.color)}"></span>${esc(c.name)}</button>`).join('')}
+    <button type="button" class="chip ${!selected ? 'on' : ''}" data-cat="">${esc(noneLabel)}</button></div>`;
+}
+function bindCatPicker(root, onPick) {
+  root.querySelectorAll('[data-cat]').forEach((b) => (b.onclick = () => {
+    root.querySelectorAll('[data-cat]').forEach((x) => x.classList.toggle('on', x === b));
+    onPick(b.dataset.cat || null);
+  }));
+}
 
 /* ================= Données ================= */
 async function load({ quiet = false } = {}) {
@@ -269,12 +284,12 @@ function viewAgenda() {
   const now = Date.now();
   const startToday = new Date(); startToday.setHours(0, 0, 0, 0);
   let evs = allEvents().filter((e) => evEndMs(e) > startToday.getTime());
-  const sources = (S.config.sources || []).filter((s) => s.enabled !== false);
-  if (S.filter === 'manual') evs = evs.filter((e) => e.origin !== 'feed');
-  else if (S.filter !== 'all') evs = evs.filter((e) => e.sourceId === S.filter);
+  const presentCats = new Set(evs.map((e) => e.category || ''));
+  if (S.filter === 'none') evs = evs.filter((e) => !e.category);
+  else if (S.filter !== 'all') evs = evs.filter((e) => e.category === S.filter);
   if (S.query) {
     const q = S.query.toLowerCase();
-    evs = evs.filter((e) => [e.title, e.location, e.notes, e.sourceName].some((x) => x && x.toLowerCase().includes(q)));
+    evs = evs.filter((e) => [e.title, e.location, e.notes, e.categoryName].some((x) => x && x.toLowerCase().includes(q)));
   }
   const upcoming = evs.filter((e) => evEndMs(e) > now);
   const nextEv = !S.query && upcoming.find((e) => !e.allDay || e.start >= localDateKey(new Date()));
@@ -292,11 +307,12 @@ function viewAgenda() {
 
   if (allEvents().length || S.query) {
     html += `<label class="search">${ICON.search}<input id="q" type="search" placeholder="Rechercher" value="${esc(S.query)}" autocomplete="off"></label>`;
-    if (sources.length) {
+    const shownCats = cats().filter((c) => presentCats.has(c.id) || S.filter === c.id);
+    if (shownCats.length) {
       html += `<div class="chips">
         <button class="chip ${S.filter === 'all' ? 'on' : ''}" data-filter="all">Tout</button>
-        <button class="chip ${S.filter === 'manual' ? 'on' : ''}" data-filter="manual"><span class="dot"></span>Mes ajouts</button>
-        ${sources.map((s) => `<button class="chip ${S.filter === s.id ? 'on' : ''}" data-filter="${esc(s.id)}"><span class="dot" style="background:${esc(s.color)}"></span>${esc(s.name)}</button>`).join('')}
+        ${shownCats.map((c) => `<button class="chip ${S.filter === c.id ? 'on' : ''}" data-filter="${esc(c.id)}"><span class="dot" style="background:${esc(c.color)}"></span>${esc(c.name)}</button>`).join('')}
+        ${presentCats.has('') || S.filter === 'none' ? `<button class="chip ${S.filter === 'none' ? 'on' : ''}" data-filter="none"><span class="dot" style="background:var(--faint)"></span>Sans rubrique</button>` : ''}
       </div>`;
     }
   }
@@ -327,9 +343,9 @@ function viewAgenda() {
       const past = evEndMs(e) <= now;
       const time = e.allDay ? `<div class="time">Jour<small>entier</small></div>`
         : `<div class="time">${fmtTime(e.start)}${e.end && e.end !== e.start ? `<small>${fmtTime(e.end)}</small>` : ''}</div>`;
-      const meta = [e.location && `<span>${esc(e.location)}</span>`, e.sourceName && `<span>${esc(e.sourceName)}</span>`].filter(Boolean).join('');
+      const meta = e.location ? `<span>${esc(e.location)}</span>` : '';
       html += `<button class="ev ${past ? 'past' : ''}" data-ev="${esc(e.icsUid)}">${time}
-        <div class="bar" style="background:${esc(e.color || 'var(--accent)')}"></div>
+        <div class="bar" style="background:${esc(e.color || 'var(--faint)')}"></div>
         <div><div class="title">${esc(e.title)}</div>${meta ? `<div class="meta">${meta}</div>` : ''}</div></button>`;
     }
     html += `</div></section>`;
@@ -353,7 +369,9 @@ function viewSources() {
       else if (!r) info = 'Pas encore synchronisé';
       else if (r.error) { info = `Erreur : ${r.error}`; cls = 'err'; }
       else info = `${r.events.length} événement${r.events.length > 1 ? 's' : ''} · synchro ${ago(r.fetchedAt)}`;
-      return `<button class="row" data-src="${esc(s.id)}"><span class="dot" style="background:${esc(s.color)};width:12px;height:12px"></span>
+      const sc = catById(s.category);
+      if (sc && !S.syncing[s.id]) info = `${sc.name} · ${info}`;
+      return `<button class="row" data-src="${esc(s.id)}"><span class="dot" style="background:${esc(sc ? sc.color : 'var(--faint)')};width:12px;height:12px"></span>
         <div class="grow"><div class="name">${esc(s.name)}</div><div class="info ${cls}">${esc(info)}</div></div>${ICON.chev}</button>`;
     }).join('')}</div>
     <div class="btns"><button class="btn ghost" data-act="add-source">${ICON.link} Ajouter un calendrier</button>
@@ -361,6 +379,13 @@ function viewSources() {
   }
   html += `<p class="note">Chaque agenda est lu dès son ajout, puis relu automatiquement toutes les ${SYNC_EVERY} environ. Les liens <b>webcal://</b> sont acceptés.</p>`;
 
+  const all = allEvents();
+  html += `<div class="section-title">Rubriques</div><div class="card">${cats().map((c) => {
+    const n = all.filter((e) => e.category === c.id).length;
+    return `<button class="row" data-catedit="${esc(c.id)}"><span class="dot" style="background:${esc(c.color)};width:12px;height:12px"></span>
+      <div class="grow"><div class="name">${esc(c.name)}</div><div class="info">${n} événement${n > 1 ? 's' : ''}</div></div>${ICON.chev}</button>`;
+  }).join('')}<button class="row" data-act="add-cat"><div class="grow"><div class="name" style="color:var(--accent)">Nouvelle rubrique</div></div></button></div>
+  <p class="note">La rubrique d'un calendrier lié s'applique à tous ses événements ; tu peux la changer pour un événement précis depuis sa fiche.</p>`;
   html += `<div class="section-title">Autres entrées</div><div class="card">
     <button class="row" data-act="add-manual"><div class="grow"><div class="name">Saisie manuelle</div><div class="info">${manualCount} événement${manualCount > 1 ? 's' : ''}</div></div>${ICON.chev}</button>
     <div class="row" style="opacity:.55"><div class="grow"><div class="name">Capture d'écran <span class="badge">BIENTÔT</span></div><div class="info">Lire une affiche ou un billet pour en extraire l'événement</div></div></div>
@@ -440,9 +465,10 @@ function bindView() {
 }
 
 document.addEventListener('click', (e) => {
-  const t = e.target.closest('[data-act],[data-ev],[data-src],[data-filter],[data-tab]');
+  const t = e.target.closest('[data-act],[data-ev],[data-src],[data-filter],[data-tab],[data-catedit]');
   if (!t) return;
   if (t.dataset.tab) { S.tab = t.dataset.tab; LS.set('tab', S.tab); closeSheet(); render(); window.scrollTo(0, 0); return; }
+  if (t.dataset.catedit) { openCatForm(catById(t.dataset.catedit)); return; }
   if (t.dataset.filter) { S.filter = t.dataset.filter; render(); return; }
   if (t.dataset.ev) { const ev = allEvents().find((x) => x.icsUid === t.dataset.ev); if (ev) openDetail(ev); return; }
   if (t.dataset.src) { const s = S.config.sources.find((x) => x.id === t.dataset.src); if (s) openSourceForm(s); return; }
@@ -450,6 +476,7 @@ document.addEventListener('click', (e) => {
   if (a === 'reload') load();
   else if (a === 'sync-all') syncNow((S.config.sources || []).filter((s) => s.enabled !== false).map((s) => s.id));
   else if (a === 'sync-token') openSyncTokenSheet();
+  else if (a === 'add-cat') openCatForm();
   else if (a === 'add') openAddMenu();
   else if (a === 'add-source') openSourceForm();
   else if (a === 'add-manual') openEventForm();
@@ -518,6 +545,7 @@ function openEventForm(existing) {
     <div class="card">
       <label class="field"><span>Titre</span><input name="title" value="${esc(v.title)}" placeholder="Concert, match, expo…" enterkeyhint="done"></label>
       <label class="field"><span>Lieu</span><input name="location" value="${esc(v.location)}" placeholder="Facultatif"></label>
+      <div class="field"><span>Rubrique</span>${catPicker(v.category || (S.filter !== 'all' && S.filter !== 'none' ? S.filter : null))}</div>
     </div>
     <div class="card" style="margin-top:12px">
       <div class="toggle"><span>Toute la journée</span><label class="switch"><input type="checkbox" name="allDay" ${allDay ? 'checked' : ''}><i></i></label></div>
@@ -531,6 +559,8 @@ function openEventForm(existing) {
     <div class="err-msg" data-err hidden></div>
     ${existing ? `<div class="btns"><button class="btn danger" data-del>Supprimer l'événement</button></div>` : ''}`, (sh) => {
     const f = (n) => sh.querySelector(`[name="${n}"]`);
+    let category = v.category || (S.filter !== 'all' && S.filter !== 'none' ? S.filter : null);
+    bindCatPicker(sh, (id) => (category = id));
     const syncAllDay = () => sh.querySelectorAll('[data-t]').forEach((el) => (el.style.visibility = f('allDay').checked ? 'hidden' : 'visible'));
     syncAllDay();
     f('allDay').onchange = syncAllDay;
@@ -564,7 +594,7 @@ function openEventForm(existing) {
         start = s.toISOString(); end = e.toISOString();
       }
       const rec = {
-        id: existing ? existing.id : uid(), title, start, end, allDay: ad, origin: existing?.origin || 'manual',
+        id: existing ? existing.id : uid(), title, start, end, allDay: ad, origin: existing?.origin || 'manual', category: category || undefined,
         location: f('location').value.trim() || undefined, url: f('url').value.trim() || undefined, notes: f('notes').value.trim() || undefined,
         createdAt: existing?.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString(),
       };
@@ -585,12 +615,11 @@ function openEventForm(existing) {
 }
 
 function openDetail(ev) {
-  const src = ev.sourceId && S.config.sources.find((s) => s.id === ev.sourceId);
   const rows = [
     ev.location && `<div class="kv"><span>Lieu</span><div><a href="https://maps.apple.com/?q=${encodeURIComponent(ev.location)}" target="_blank" rel="noopener">${esc(ev.location)}</a></div></div>`,
     ev.url && /^https?:\/\//i.test(ev.url) && `<div class="kv"><span>Lien</span><div><a href="${esc(ev.url)}" target="_blank" rel="noopener">${esc(ev.url.replace(/^https?:\/\//, ''))}</a></div></div>`,
     ev.notes && `<div class="kv"><span>Notes</span><div>${esc(ev.notes)}</div></div>`,
-    `<div class="kv"><span>Source</span><div><span class="dot" style="display:inline-block;margin-right:6px;background:${esc(ev.color || 'var(--accent)')}"></span>${src ? esc(src.name) : 'Ajout manuel'}</div></div>`,
+    `<div class="kv"><span>Rubrique</span>${catPicker(ev.category)}</div>`,
   ].filter(Boolean).join('');
   openSheet(`<div class="sheet-head"><span></span><button data-close>Fermer</button></div>
     <div class="detail"><h3>${esc(ev.title)}</h3><div class="when">${esc(whenText(ev))}</div></div>
@@ -599,6 +628,17 @@ function openDetail(ev) {
       ? `<button class="btn ghost" data-hide>Masquer de Radar</button>`
       : `<button class="btn ghost" data-edit>${ICON.pen} Modifier</button>`}</div>`, (sh) => {
     sh.querySelector('[data-close]').onclick = closeSheet;
+    bindCatPicker(sh, (id) => {
+      if (ev.origin === 'feed') {
+        const src = S.config.sources.find((x) => x.id === ev.sourceId);
+        mutate((c) => {
+          c.eventCategories = { ...(c.eventCategories || {}) };
+          if ((id || null) === (src?.category || null)) delete c.eventCategories[ev.icsUid]; else c.eventCategories[ev.icsUid] = id;
+        }, 'Rubrique mise à jour');
+      } else {
+        mutate((c) => { const m = (c.manual || []).find((x) => x.id === ev.id); if (m) m.category = id || undefined; }, 'Rubrique mise à jour');
+      }
+    });
     const ed = sh.querySelector('[data-edit]');
     if (ed) ed.onclick = () => openEventForm(S.config.manual.find((m) => m.id === ev.id));
     const hd = sh.querySelector('[data-hide]');
@@ -607,13 +647,12 @@ function openDetail(ev) {
 }
 
 function openSourceForm(existing) {
-  const used = new Set((S.config.sources || []).map((s) => s.color));
-  let color = existing?.color || COLORS.find((c) => !used.has(c) && c !== COLORS[0]) || COLORS[1];
+  let category = existing ? existing.category || null : null;
   openSheet(`<div class="sheet-head"><button data-close>Annuler</button><h3>${existing ? 'Calendrier' : 'Lier un calendrier'}</h3><button data-save><b>${existing ? 'OK' : 'Ajouter'}</b></button></div>
     <div class="card">
       <label class="field"><span>Lien du calendrier (.ics ou webcal://)</span><input name="url" type="url" value="${esc(existing?.url)}" placeholder="https://…/calendar.ics" autocapitalize="off" spellcheck="false"></label>
       <label class="field"><span>Nom</span><input name="name" value="${esc(existing?.name)}" placeholder="Ex. : Ligue 1, Concerts…"></label>
-      <div class="field"><span>Couleur</span><div class="swatches">${COLORS.map((c) => `<button type="button" data-color="${c}" class="${c === color ? 'on' : ''}" style="background:${c};color:${c}" aria-label="Couleur"></button>`).join('')}</div></div>
+      <div class="field"><span>Rubrique</span>${catPicker(category)}</div>
       <div class="toggle"><span>Traduire en français</span><label class="switch"><input type="checkbox" name="translate" ${existing?.translate === false ? '' : 'checked'}><i></i></label></div>
       ${existing ? `<div class="toggle"><span>Afficher dans Radar</span><label class="switch"><input type="checkbox" name="enabled" ${existing.enabled !== false ? 'checked' : ''}><i></i></label></div>` : ''}
     </div>
@@ -621,9 +660,7 @@ function openSourceForm(existing) {
     ${existing ? '' : `<p class="note">Sur Sync2Cal, ouvre le calendrier voulu puis copie son lien d'abonnement (« Copy link » / iCal). Il est lu tout de suite, puis relu toutes les ${SYNC_EVERY} environ.</p>`}
     ${existing ? `<div class="btns"><button class="btn danger" data-del>Retirer ce calendrier</button></div>` : ''}`, (sh) => {
     const f = (n) => sh.querySelector(`[name="${n}"]`);
-    sh.querySelectorAll('[data-color]').forEach((b) => (b.onclick = () => {
-      color = b.dataset.color; sh.querySelectorAll('[data-color]').forEach((x) => x.classList.toggle('on', x === b));
-    }));
+    bindCatPicker(sh, (id) => (category = id));
     if (!existing) setTimeout(() => f('url').focus(), 300);
     sh.querySelector('[data-close]').onclick = closeSheet;
     sh.querySelector('[data-save]').onclick = async () => {
@@ -636,7 +673,7 @@ function openSourceForm(existing) {
         const enabled = f('enabled').checked;
         const translate = f('translate').checked;
         closeSheet();
-        await mutate((c) => { const s = c.sources.find((x) => x.id === existing.id); if (s) Object.assign(s, { url, name: name || s.name, color, enabled, translate }); }, url === existing.url ? 'Calendrier mis à jour' : null);
+        await mutate((c) => { const s = c.sources.find((x) => x.id === existing.id); if (s) Object.assign(s, { url, name: name || s.name, category: category || undefined, enabled, translate }); }, url === existing.url ? 'Calendrier mis à jour' : null);
         if (url !== existing.url && enabled) syncNow([existing.id]);
         return;
       }
@@ -644,7 +681,7 @@ function openSourceForm(existing) {
       const parsed = await tryDirectFetch({ url });
       if (parsed && parsed.error) { err.textContent = parsed.error; err.hidden = false; btn.innerHTML = '<b>Ajouter</b>'; btn.disabled = false; return; }
       if (!name) name = parsed?.calName || (() => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return 'Calendrier'; } })();
-      const src = { id: uid(), name, url, color, enabled: true, translate: f('translate').checked, addedAt: new Date().toISOString() };
+      const src = { id: uid(), name, url, category: category || undefined, enabled: true, translate: f('translate').checked, addedAt: new Date().toISOString() };
       closeSheet();
       if (S.tab !== 'sources') { S.tab = 'sources'; LS.set('tab', 'sources'); }
       if (!parsed) S.syncing[src.id] = true;
@@ -662,6 +699,49 @@ function openSourceForm(existing) {
       if (!confirm(`Retirer « ${existing.name} » de Radar ?`)) return;
       closeSheet();
       mutate((c) => { c.sources = c.sources.filter((s) => s.id !== existing.id); }, 'Calendrier retiré');
+    };
+  });
+}
+
+function openCatForm(existing) {
+  const used = new Set(cats().map((c) => c.color));
+  let color = existing?.color || COLORS.find((c) => !used.has(c)) || COLORS[0];
+  openSheet(`<div class="sheet-head"><button data-close>Annuler</button><h3>${existing ? 'Rubrique' : 'Nouvelle rubrique'}</h3><button data-save><b>${existing ? 'OK' : 'Ajouter'}</b></button></div>
+    <div class="card">
+      <label class="field"><span>Nom</span><input name="name" value="${esc(existing?.name)}" placeholder="Ex. : Concert, Expo…" maxlength="30"></label>
+      <div class="field"><span>Couleur</span><div class="swatches">${COLORS.map((c) => `<button type="button" data-color="${c}" class="${c === color ? 'on' : ''}" style="background:${c};color:${c}" aria-label="Couleur"></button>`).join('')}</div></div>
+    </div>
+    <div class="err-msg" data-err hidden></div>
+    ${existing ? `<div class="btns"><button class="btn danger" data-del>Supprimer la rubrique</button></div><p class="note">Ses événements resteront dans Radar, sans rubrique.</p>` : ''}`, (sh) => {
+    const name = sh.querySelector('[name="name"]');
+    sh.querySelectorAll('[data-color]').forEach((b) => (b.onclick = () => {
+      color = b.dataset.color; sh.querySelectorAll('[data-color]').forEach((x) => x.classList.toggle('on', x === b));
+    }));
+    if (!existing) setTimeout(() => name.focus(), 300);
+    sh.querySelector('[data-close]').onclick = closeSheet;
+    sh.querySelector('[data-save]').onclick = () => {
+      const n = name.value.trim();
+      const err = sh.querySelector('[data-err]');
+      if (!n) { err.textContent = 'Donne un nom à la rubrique.'; err.hidden = false; return; }
+      if (cats().some((c) => c.name.toLowerCase() === n.toLowerCase() && c.id !== existing?.id)) { err.textContent = 'Cette rubrique existe déjà.'; err.hidden = false; return; }
+      closeSheet();
+      mutate((c) => {
+        c.categories = categoriesOf(c).map((x) => ({ ...x }));
+        if (existing) { const x = c.categories.find((k) => k.id === existing.id); if (x) Object.assign(x, { name: n, color }); }
+        else c.categories.push({ id: uid(), name: n, color });
+      }, existing ? 'Rubrique mise à jour' : 'Rubrique ajoutée');
+    };
+    const del = sh.querySelector('[data-del]');
+    if (del) del.onclick = () => {
+      if (!confirm(`Supprimer la rubrique « ${existing.name} » ?`)) return;
+      closeSheet();
+      if (S.filter === existing.id) S.filter = 'all';
+      mutate((c) => {
+        c.categories = categoriesOf(c).filter((k) => k.id !== existing.id);
+        (c.sources || []).forEach((s) => { if (s.category === existing.id) delete s.category; });
+        (c.manual || []).forEach((m) => { if (m.category === existing.id) delete m.category; });
+        for (const [k, v] of Object.entries(c.eventCategories || {})) if (v === existing.id) delete c.eventCategories[k];
+      }, 'Rubrique supprimée');
     };
   });
 }

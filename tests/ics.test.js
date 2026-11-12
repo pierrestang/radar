@@ -98,3 +98,20 @@ test('traduction des matchs en français', () => {
   assert.equal(frLocation('Decathlon Arena - Stade Pierre-Mauroy, Villeneuve d&apos;Ascq'), "Decathlon Arena - Stade Pierre-Mauroy, Villeneuve d'Ascq");
   assert.equal(frLocation('Wembley Stadium, London'), 'Wembley Stadium, Londres');
 });
+
+test('rubriques : défaut du calendrier, exception par événement, pas de source dans le .ics', () => {
+  const cfg = {
+    sources: [{ id: 's1', name: 'OM', url: 'x', category: 'sport' }],
+    manual: [{ id: 'm1', title: 'Dune 3', start: '2026-12-16', end: '2026-12-17', allDay: true, category: 'film' }],
+    eventCategories: { 'b@radar-s1': 'video' },
+  };
+  const remote = { sources: { s1: { events: [
+    { uid: 'a', title: 'Marseille v Lens', start: '2026-11-22T19:45:00.000Z', allDay: false },
+    { uid: 'b', title: 'Making-of', start: '2026-11-23T19:45:00.000Z', allDay: false },
+  ] } } };
+  const evs = mergedEvents(cfg, remote);
+  assert.deepEqual(evs.map((e) => e.categoryName), ['Sport', 'Vidéo', 'Film']);
+  const ics = buildICS(cfg, remote, { now: NOW });
+  assert.ok(!ics.includes('via OM') && !ics.includes('CATEGORIES:OM'));
+  assert.ok(ics.includes('CATEGORIES:Sport') && ics.includes('CATEGORIES:Film'));
+});

@@ -201,10 +201,10 @@ export function buildICS(config, remote, { now = Date.now() } = {}) {
     }
     L.push(`SUMMARY:${esc(ev.title)}`);
     if (ev.location) L.push(`LOCATION:${esc(ev.location)}`);
-    const desc = [ev.notes, ev.sourceName ? `— via ${ev.sourceName} (Radar)` : null].filter(Boolean).join('\n\n');
+    const desc = ev.notes || '';
     if (desc) L.push(`DESCRIPTION:${esc(desc)}`);
     if (ev.url) L.push(`URL:${esc(ev.url).replace(/\\([,;])/g, '$1')}`);
-    if (ev.sourceName) L.push(`CATEGORIES:${esc(ev.sourceName)}`);
+    if (ev.categoryName) L.push(`CATEGORIES:${esc(ev.categoryName)}`);
     L.push('TRANSP:TRANSPARENT');
     L.push('END:VEVENT');
   }
@@ -217,9 +217,17 @@ export function mergedEvents(config, remote) {
   const out = [];
   const seen = new Set();
   const hidden = new Set(config.hidden || []);
+  const cats = new Map(categoriesOf(config).map((c) => [c.id, c]));
+  const overrides = config.eventCategories || {};
+  const withCategory = (ev, fallback) => {
+    const id = Object.prototype.hasOwnProperty.call(overrides, ev.icsUid) ? overrides[ev.icsUid] : fallback;
+    const cat = id && cats.get(id);
+    ev.category = cat ? cat.id : null; ev.categoryName = cat ? cat.name : null; ev.color = cat ? cat.color : null;
+    return ev;
+  };
   const keyOf = (e) => `${e.title.toLowerCase().replace(/\s+/g, ' ').trim()}|${e.start.slice(0, 16)}`;
   for (const m of config.manual || []) {
-    const ev = { ...m, origin: m.origin || 'manual', sourceId: null, sourceName: null, icsUid: `${m.id}@radar` };
+    const ev = withCategory({ ...m, origin: m.origin || 'manual', sourceId: null, sourceName: null, icsUid: `${m.id}@radar` }, m.category);
     seen.add(keyOf(ev)); out.push(ev);
   }
   for (const src of config.sources || []) {
@@ -227,7 +235,8 @@ export function mergedEvents(config, remote) {
     const list = (remote && remote.sources && remote.sources[src.id] && remote.sources[src.id].events) || [];
     for (const e of list) {
       const base = src.translate === false ? e : frenchify(e);
-      const ev = { ...base, origin: 'feed', sourceId: src.id, sourceName: src.name, color: src.color, icsUid: `${e.uid}@radar-${src.id}` };
+      const ev = { ...base, origin: 'feed', sourceId: src.id, sourceName: src.name, icsUid: `${e.uid}@radar-${src.id}` };
+      withCategory(ev, src.category);
       if (hidden.has(ev.icsUid)) continue;
       const k = keyOf(ev);
       if (seen.has(k)) continue;
@@ -238,8 +247,19 @@ export function mergedEvents(config, remote) {
   return out;
 }
 
+export const DEFAULT_CATEGORIES = [
+  { id: 'sport', name: 'Sport', color: '#2F6FEB' },
+  { id: 'jeux', name: 'Jeux vidéo', color: '#9333EA' },
+  { id: 'film', name: 'Film', color: '#E0573B' },
+  { id: 'serie', name: 'Série', color: '#DB2777' },
+  { id: 'video', name: 'Vidéo', color: '#CA8A04' },
+];
+export function categoriesOf(config) {
+  return Array.isArray(config.categories) ? config.categories : DEFAULT_CATEGORIES;
+}
+
 export function emptyConfig() {
-  return { version: 1, calendarName: 'Radar', sources: [], manual: [], hidden: [] };
+  return { version: 1, calendarName: 'Radar', sources: [], manual: [], hidden: [], categories: DEFAULT_CATEGORIES.map((c) => ({ ...c })), eventCategories: {} };
 }
 export function emptyRemote() {
   return { version: 1, updatedAt: null, sources: {} };

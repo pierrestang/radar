@@ -11,4 +11,5 @@ Voir README.md pour l'architecture. Points non évidents :
 - 2026-11-12 : v1 — PWA (agenda, sources, abonnement), saisie manuelle, flux .ics, synchro Actions 30 min, 6 tests.
 - 2026-11-12 : synchro immédiate — l'app lance `sync.yml` (workflow_dispatch) à l'ajout/changement d'URL d'un agenda et suit l'avancement ; second jeton fine-grained (Actions write sur `radar`) stocké en `radar.syncToken`. Lecture directe depuis le navigateur tentée d'abord (si CORS autorisé).
 - 2026-11-12 : francisation des flux (`shared/translate.js`, dictionnaire, appliquée dans `mergedEvents` → app + .ics ; « A VS B », notes, lieux ; option par source `translate`). Pas d'appel à un service de traduction.
+- 2026-11-12 : rubriques (Sport, Jeux vidéo, Film, Série, Vidéo + perso) — `config.categories`, rubrique par défaut d'une source (`source.category`), exception par événement (`config.eventCategories[icsUid]`), `manual[].category`. La source n'est plus affichée dans l'agenda ni dans le .ics (CATEGORIES = rubrique).
 - À faire : capture d'écran → événement.
