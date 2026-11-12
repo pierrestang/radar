@@ -61,7 +61,7 @@ a { color: inherit; text-underline-offset: 3px; }
 
 /* --- La feuille : tout le contenu, crème, posée sur le fond -------------------------------------- */
 
-#app { max-width: 640px; width: calc(100% - var(--e-4)); margin: var(--e-3) auto calc(var(--safe-bottom) + 112px);
+#app { max-width: 640px; width: calc(100% - var(--e-4)); margin: var(--e-3) auto calc(var(--safe-bottom) + 88px);
   padding: var(--e-3); border-radius: var(--r); background: var(--feuille); box-shadow: 0 24px 60px rgba(40, 30, 10, .12); }
 #app > * + * { margin-top: var(--e-3); }
 #app > :first-child { margin-top: 0 !important; }
@@ -191,17 +191,17 @@ a { color: inherit; text-underline-offset: 3px; }
 .btns { display: grid; gap: var(--e-2); margin-top: var(--e-3); }
 .inline-btn { border: 0; background: none; color: var(--texte); font-weight: 600; padding: var(--e-1) 0; text-decoration: underline; }
 
-/* --- Barre d'onglets : un rectangle de verre crème, comme l'en-tête de Fantôme ----------------------- */
+/* --- Menu : un rectangle de verre crème collé en haut, comme l'en-tête de Fantôme --------------------- */
 
-.tabbar { position: fixed; z-index: 10; left: 50%; bottom: calc(var(--safe-bottom) + var(--e-3)); transform: translateX(-50%);
-  display: flex; gap: var(--e-1); width: min(640px, calc(100% - var(--e-4))); padding: var(--e-1); border-radius: var(--r);
-  background: var(--verre); -webkit-backdrop-filter: var(--flou); backdrop-filter: var(--flou); box-shadow: 0 12px 40px rgba(40, 30, 10, .12); }
-.tabbar button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: var(--e-2); min-height: 40px;
-  border: 0; border-radius: var(--r-pilule); background: none; color: var(--discret); font-size: var(--t-1); }
-.tabbar button svg { width: 18px; height: 18px; }
+.tabbar { position: sticky; z-index: 20; top: calc(var(--safe-top) + var(--e-3)); display: flex; justify-content: center; gap: var(--e-1);
+  width: calc(100% - var(--e-4)); max-width: 640px; margin: var(--e-3) auto 0; padding: var(--e-1); border-radius: var(--r);
+  background: var(--verre); -webkit-backdrop-filter: var(--flou); backdrop-filter: var(--flou); }
+.tabbar button { flex: 1; display: inline-flex; align-items: center; justify-content: center; min-height: 34px; padding: 0 var(--e-3);
+  border: 0; border-radius: var(--r-pilule); background: none; color: var(--discret); font-size: var(--t-1); line-height: 1.2; }
+.tabbar button svg { display: none; }
 .tabbar button:hover { color: var(--texte); background: var(--survol); }
 .tabbar button.on { color: var(--texte); background: var(--surface); box-shadow: inset 0 0 0 1px var(--bordure); }
-.fab { position: fixed; z-index: 11; right: max(var(--e-3), calc(50vw - 320px)); bottom: calc(var(--safe-bottom) + 80px);
+.fab { position: fixed; z-index: 11; right: max(var(--e-3), calc(50vw - 320px)); bottom: calc(var(--safe-bottom) + var(--e-3));
   width: 52px; height: 52px; border: 0; border-radius: var(--r); background: var(--accent); color: var(--accent-texte);
   display: grid; place-items: center; box-shadow: var(--ombre); }
 .fab svg { width: 22px; height: 22px; stroke-width: 2.2; }
@@ -290,6 +290,20 @@ a { color: inherit; text-underline-offset: 3px; }
 
 /* --- Messages brefs ---------------------------------------------------------------------------------- */
 
-.toast { position: fixed; z-index: 30; left: 50%; bottom: calc(var(--safe-bottom) + 84px); transform: translateX(-50%);
+.toast { position: fixed; z-index: 30; left: 50%; bottom: calc(var(--safe-bottom) + 80px); transform: translateX(-50%);
   width: max-content; max-width: calc(100vw - var(--e-4)); padding: var(--e-2) var(--e-3); border-radius: var(--r-pilule);
   background: var(--accent); color: var(--accent-texte); box-shadow: var(--ombre); font-size: var(--t-1); animation: fade .18s ease-out; }
+
+/* --- Passage d'un onglet à l'autre, comme les pages de Fantôme : le fond, le titre et le menu restent en place ;
+   la feuille s'efface puis la nouvelle monte doucement en apparaissant. ---------------------------------------- */
+:root { --glisse: cubic-bezier(.22, 1, .36, 1); }
+#fond { view-transition-name: fond; }
+.titre-site { view-transition-name: titre-radar; }
+.tabbar { view-transition-name: menu; }
+::view-transition-group(*) { animation-duration: .6s; animation-timing-function: var(--glisse); }
+::view-transition-old(fond), ::view-transition-new(fond), ::view-transition-old(root), ::view-transition-new(root) { animation: none; }
+::view-transition-group(feuille) { animation: none; }
+::view-transition-old(feuille) { animation: .18s ease-out both disparait; }
+::view-transition-new(feuille) { animation: .55s var(--glisse) .08s both monte; }
+@keyframes disparait { to { opacity: 0; } }
+@keyframes monte { from { opacity: 0; transform: translateY(24px); } }

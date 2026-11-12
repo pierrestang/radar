@@ -501,7 +501,12 @@ $('#fab').onclick = () => openAddMenu();
 const TABS = ['agenda', 'sources', 'settings'];
 function goTab(tab) {
   if (!TABS.includes(tab) || tab === S.tab) return;
-  S.tab = tab; LS.set('tab', tab); closeSheet(); render(); window.scrollTo(0, 0);
+  const swap = () => { S.tab = tab; LS.set('tab', tab); closeSheet(); render(); window.scrollTo(0, 0); };
+  if (!document.startViewTransition || matchMedia('(prefers-reduced-motion: reduce)').matches) return swap();
+  // la feuille ne porte son nom de transition que le temps du passage (comme dans Fantôme)
+  const app = $('#app');
+  app.style.viewTransitionName = 'feuille';
+  document.startViewTransition(swap).finished.finally(() => (app.style.viewTransitionName = ''));
 }
 function stepTab(dir) {
   if (!(S.token && S.gistId) || !$('#sheet').hidden) return;
