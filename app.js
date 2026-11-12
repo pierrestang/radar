@@ -18,7 +18,7 @@ const S = {
   config: LS.get('config') || emptyConfig(),
   remote: LS.get('remote') || emptyRemote(),
   icsUrl: LS.get('icsUrl'),
-  tab: LS.get('tab', 'agenda'),
+  tab: LS.get('tab', 'agenda') === 'share' ? 'sources' : LS.get('tab', 'agenda'),
   filter: 'all',
   query: '',
   loading: false,
@@ -283,7 +283,6 @@ function render() {
   document.querySelectorAll('#tabbar button').forEach((b) => b.classList.toggle('on', b.dataset.tab === S.tab));
   if (!connected) { app.innerHTML = viewSetup(); bindSetup(); return; }
   if (S.tab === 'sources') app.innerHTML = viewSources();
-  else if (S.tab === 'share') app.innerHTML = viewShare();
   else app.innerHTML = viewAgenda();
   bindView();
 }
@@ -373,10 +372,15 @@ function viewAgenda() {
 function viewSources() {
   const srcs = S.config.sources || [];
   const busy = Object.keys(S.syncing).length > 0;
-  let html = header('Sources', '', `<div class="head-btns">
-    <button class="iconbtn" data-act="add-source" aria-label="Ajouter un calendrier" title="Ajouter un calendrier"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
-    <button class="iconbtn ${busy ? 'spin' : ''}" data-act="sync-all" ${busy ? 'disabled' : ''} aria-label="Synchroniser" title="Synchroniser">${ICON.refresh}</button></div>`);
-  html += `<div class="section-title">Calendriers liés${srcs.length ? ` <span class="count-pill">${srcs.length}</span>` : ''}</div>`;
+  const url = S.icsUrl;
+  let html = header('Réglages', '', ' ');
+
+  // 1. Entrées : calendriers liés
+  html += `<div class="section-head"><div class="section-title">Calendriers liés${srcs.length ? ` <span class="count-pill">${srcs.length}</span>` : ''}</div>
+    <div class="head-btns">
+      <button class="iconbtn sm" data-act="add-source" aria-label="Ajouter un calendrier" title="Ajouter un calendrier"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+      <button class="iconbtn sm ${busy ? 'spin' : ''}" data-act="sync-all" ${busy || !srcs.length ? 'disabled' : ''} aria-label="Synchroniser" title="Synchroniser">${ICON.refresh}</button>
+    </div></div>`;
   if (!srcs.length) {
     html += `<div class="card"><button class="row" data-act="add-source"><div class="grow"><div class="name">Coller un lien de calendrier</div><div class="info">Sync2Cal, Google Agenda, club de sport, billetterie…</div></div>${ICON.chev}</button></div>`;
   } else {
@@ -396,32 +400,25 @@ function viewSources() {
   }
   html += `<p class="note">Mis à jour toutes les ${SYNC_EVERY}.</p>`;
 
+  // 2. Organisation : rubriques
   const all = allEvents();
   html += `<div class="section-title">Rubriques</div><div class="card">${cats().map((c) => {
     const n = all.filter((e) => e.category === c.id).length;
     return `<button class="row" data-catedit="${esc(c.id)}"><span class="dot" style="background:${esc(c.color)};width:12px;height:12px"></span>
       <div class="grow"><div class="name">${esc(c.name)}</div><div class="info">${n} événement${n > 1 ? 's' : ''}</div></div>${ICON.chev}</button>`;
   }).join('')}<button class="row" data-act="add-cat"><div class="grow"><div class="name" style="color:var(--accent)">Nouvelle rubrique</div></div></button></div>`;
-  return html;
-}
 
-function viewShare() {
-  const url = S.icsUrl;
-  let html = header('Abonnement', 'Suivre Radar dans tes agendas');
-  html += `<div class="section-title">Google Agenda</div>
+  // 3. Publication : Google Agenda et lien
+  html += `<div class="section-title">Publication</div>
     <div class="card"><div class="row"><span class="dot" style="width:12px;height:12px"></span>
-      <div class="grow"><div class="name">Connecté</div></div></div></div>
-    <div class="section-title">Lien</div>
-    <div class="url-row"><div class="url-box" id="icsurl">${esc(url || 'Lien disponible après la première synchro…')}</div>
+      <div class="grow"><div class="name">Google Agenda</div><div class="info">Connecté</div></div></div>
+    <label class="field"><span>Nom du calendrier</span><input id="calname" value="${esc(S.config.calendarName || 'Radar')}" maxlength="60"></label></div>
+    <div class="url-row" style="margin-top:12px"><div class="url-box" id="icsurl">${esc(url || 'Lien disponible après la première synchro…')}</div>
       <button class="iconbtn" data-act="copy" aria-label="Copier le lien" title="Copier le lien">${ICON.copy}</button></div>`;
 
-  html += `<div class="section-title">Réglages</div><div class="card">
-    <label class="field"><span>Nom du calendrier</span><input id="calname" value="${esc(S.config.calendarName || 'Radar')}" maxlength="60"></label>
-  </div>
-  <div class="card" style="margin-top:12px">
+  // 4. Compte
+  html += `<div class="section-title">Compte</div><div class="card">
     <button class="row" data-act="sync-token"><div class="grow"><div class="name">Synchro immédiate</div><div class="info">${S.syncToken ? 'Activée' : 'Désactivée'}</div></div>${ICON.chev}</button>
-  </div>
-  <div class="card" style="margin-top:12px">
     <button class="row" data-act="logout"><div class="grow"><div class="name" style="color:var(--danger)">Déconnecter cet appareil</div><div class="info">Tes données restent dans ton Gist GitHub.</div></div></button>
   </div>
   <p class="note">Données : <a href="https://gist.github.com/${esc(S.gistId)}" target="_blank" rel="noopener">Gist secret</a>.</p>`;

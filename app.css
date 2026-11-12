@@ -258,3 +258,8 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .count-pill { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; margin-left: 6px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 700; letter-spacing: 0; vertical-align: 1px; }
 .url-row { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; }
 .url-row .url-box { flex: 1; min-width: 0; margin-bottom: 0; }
+
+.section-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin: 22px 4px 8px; }
+.section-head .section-title { margin: 0; }
+.iconbtn.sm { width: 32px; height: 32px; }
+.iconbtn.sm svg { width: 17px; height: 17px; }
