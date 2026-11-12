@@ -18,7 +18,7 @@ const S = {
   config: LS.get('config') || emptyConfig(),
   remote: LS.get('remote') || emptyRemote(),
   icsUrl: LS.get('icsUrl'),
-  tab: LS.get('tab', 'agenda') === 'share' ? 'sources' : LS.get('tab', 'agenda'),
+  tab: ({ share: 'settings' })[LS.get('tab', 'agenda')] || LS.get('tab', 'agenda'),
   filter: 'all',
   query: '',
   loading: false,
@@ -283,12 +283,13 @@ function render() {
   document.querySelectorAll('#tabbar button').forEach((b) => b.classList.toggle('on', b.dataset.tab === S.tab));
   if (!connected) { app.innerHTML = viewSetup(); bindSetup(); return; }
   if (S.tab === 'sources') app.innerHTML = viewSources();
+  else if (S.tab === 'settings') app.innerHTML = viewSettings();
   else app.innerHTML = viewAgenda();
   bindView();
 }
 
 function header(title, sub, buttons) {
-  return `<header class="head"><div><h1>${esc(title)}</h1>${sub ? `<div class="sub">${sub}</div>` : ''}</div>
+  return `<header class="head"><div><h1 class="visually-hidden">${esc(title)}</h1>${sub ? `<div class="sub">${sub}</div>` : ''}</div>
     ${buttons || `<button class="iconbtn ${S.loading ? 'spin' : ''}" data-act="reload" aria-label="Actualiser">${ICON.refresh}</button>`}</header>`;
 }
 
@@ -372,8 +373,7 @@ function viewAgenda() {
 function viewSources() {
   const srcs = S.config.sources || [];
   const busy = Object.keys(S.syncing).length > 0;
-  const url = S.icsUrl;
-  let html = header('Réglages', '', ' ');
+  let html = '';
 
   // 1. Entrées : calendriers liés
   html += `<div class="section-head"><div class="section-title">Calendriers liés${srcs.length ? ` <span class="count-pill">${srcs.length}</span>` : ''}</div>
@@ -399,8 +399,13 @@ function viewSources() {
     }).join('')}</div>`;
   }
   html += `<p class="note">Mis à jour toutes les ${SYNC_EVERY}.</p>`;
+  return html;
+}
 
-  // 2. Organisation : rubriques
+function viewSettings() {
+  const url = S.icsUrl;
+  let html = '';
+  // Organisation : rubriques
   const all = allEvents();
   html += `<div class="section-title">Rubriques <span class="count-pill">${cats().length}</span></div><div class="card">${cats().map((c) => {
     const n = all.filter((e) => e.category === c.id).length;
@@ -408,7 +413,7 @@ function viewSources() {
       <div class="grow"><div class="name">${esc(c.name)}</div><div class="info">${n} événement${n > 1 ? 's' : ''}</div></div>${ICON.chev}</button>`;
   }).join('')}<button class="row" data-act="add-cat"><div class="grow"><div class="name" style="color:var(--accent)">Nouvelle rubrique</div></div></button></div>`;
 
-  // 3. Publication : Google Agenda et lien
+  // Publication : Google Agenda et lien
   html += `<div class="section-title">Publication</div>
     <div class="card"><div class="row"><span class="dot" style="width:12px;height:12px"></span>
       <div class="grow"><div class="name">Google Agenda</div><div class="info">Connecté</div></div></div>
@@ -416,7 +421,7 @@ function viewSources() {
     <div class="url-row" style="margin-top:12px"><div class="url-box" id="icsurl">${esc(url || 'Lien disponible après la première synchro…')}</div>
       <button class="iconbtn" data-act="copy" aria-label="Copier le lien" title="Copier le lien">${ICON.copy}</button></div>`;
 
-  // 4. Compte
+  // Compte
   html += `<div class="section-title">Compte</div><div class="card">
     <button class="row" data-act="sync-token"><div class="grow"><div class="name">Synchro immédiate</div><div class="info">${S.syncToken ? 'Activée' : 'Désactivée'}</div></div>${ICON.chev}</button>
     <button class="row" data-act="logout"><div class="grow"><div class="name" style="color:var(--danger)">Déconnecter cet appareil</div><div class="info">Tes données restent dans ton Gist GitHub.</div></div></button>

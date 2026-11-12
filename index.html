@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Radar</title>
   <meta name="description" content="Mon agenda d'événements à venir, fusionné en un seul calendrier.">
-  <meta name="theme-color" content="#c9bfa6">
+  <meta name="theme-color" content="#8fb79a">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -18,6 +18,7 @@
 </head>
 <body>
   <canvas id="fond" aria-hidden="true"></canvas>
+  <p class="titre-site" aria-hidden="true">Radar</p>
   <div id="app" aria-live="polite"></div>
 
   <nav class="tabbar" id="tabbar" hidden>
@@ -25,7 +26,11 @@
       <svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>
       <span>Agenda</span>
     </button>
-    <button data-tab="sources" aria-label="Réglages">
+    <button data-tab="sources" aria-label="Sources">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2"/><path d="M7.8 7.8a6 6 0 0 0 0 8.4M16.2 7.8a6 6 0 0 1 0 8.4M4.9 4.9a10 10 0 0 0 0 14.2M19.1 4.9a10 10 0 0 1 0 14.2"/></svg>
+      <span>Sources</span>
+    </button>
+    <button data-tab="settings" aria-label="Réglages">
       <svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2.2"/><circle cx="10" cy="17" r="2.2"/></svg>
       <span>Réglages</span>
     </button>

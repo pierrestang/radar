@@ -1,4 +1,4 @@
-// Fond animé (direction artistique de microsoft.ai) : nappes de lumière sable, ambre et pêche sur bleu ardoise,
+// Fond animé (repris de Fantôme, en nuances de vert) : nappes de lumière sauge, vert tendre et menthe sur vert profond,
 // floues et étirées en diagonale, qui dérivent lentement, sans rien charger d'Internet. Calculé en petite résolution puis adouci par un flou CSS.
 // Mouvement réduit demandé par macOS → une seule image fixe. Sans WebGL → dégradé CSS de secours.
 (() => {
@@ -61,12 +61,12 @@
       float n2 = bruit(q * vec2(1.8, 3.4) - vec2(0.0, temps * 0.028) + 7.0);
       float v = taches(q * vec2(1.6, 4.2) + vec2(temps * 0.02, 0.0), 0.22);
 
-      // palette : bleu ardoise, sable, ambre, pêche, et un voile crème là où la lumière est forte
-      vec3 ardoise = vec3(0.475, 0.553, 0.627);
-      vec3 sable   = vec3(0.886, 0.792, 0.596);
-      vec3 ambre   = vec3(0.937, 0.722, 0.431);
-      vec3 peche   = vec3(0.902, 0.663, 0.553);
-      vec3 creme   = vec3(0.980, 0.972, 0.953);
+      // palette : vert profond, sauge, vert tendre, menthe, et un voile clair là où la lumière est forte
+      vec3 ardoise = vec3(0.243, 0.459, 0.373);   // vert profond
+      vec3 sable   = vec3(0.741, 0.851, 0.627);   // sauge claire
+      vec3 ambre   = vec3(0.596, 0.800, 0.427);   // vert tendre
+      vec3 peche   = vec3(0.553, 0.820, 0.706);   // menthe
+      vec3 creme   = vec3(0.960, 0.980, 0.940);
       vec3 couleur = mix(ardoise, sable, smoothstep(0.38, 0.82, n1 + 0.25 * (uv.y - 0.5)));
       couleur = mix(couleur, ambre, smoothstep(0.6, 0.98, n2) * 0.6);
       couleur = mix(couleur, peche, smoothstep(0.6, 1.0, n1 * n2 * 1.6) * 0.45);
