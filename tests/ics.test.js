@@ -83,3 +83,18 @@ test('liens webcal et heure murale', () => {
   assert.equal(normalizeUrl('webcal://sync2cal.com/x.ics'), 'https://sync2cal.com/x.ics');
   assert.equal(new Date(wallToUtc(2026, 3, 29, 2, 30, 0, 'Europe/Paris')).toISOString(), '2026-03-29T01:30:00.000Z');
 });
+
+import { frTitle, frNotes, frLocation } from '../shared/translate.js';
+test('traduction des matchs en français', () => {
+  assert.equal(frTitle('Italy v France'), 'Italie VS France');
+  assert.equal(frTitle('France v Türkiye'), 'France VS Turquie');
+  assert.equal(frTitle('Austria 0-1 France (FT)'), 'Autriche 0-1 France (terminé)');
+  assert.equal(frTitle('Stade Brestois 29 2-0 Marseille (FT)'), 'Stade Brestois 29 2-0 Marseille (terminé)');
+  assert.equal(frTitle('Paris Saint Germain v Marseille'), 'Paris Saint-Germain VS Marseille');
+  assert.equal(frTitle('Concert de Justice'), 'Concert de Justice');
+  assert.equal(frNotes('UEFA Nations League - League A - 5\nReferee: Istvan Kovacs'), 'Ligue des nations · Ligue A · Journée 5\nArbitre : Istvan Kovacs');
+  assert.equal(frNotes('UEFA Europa League - League Stage - 2\nHalf-time 0-1'), 'Ligue Europa · Phase de ligue · Journée 2\nMi-temps : 0-1');
+  assert.equal(frNotes('Ligue 1 - Round 12'), 'Ligue 1 · Journée 12');
+  assert.equal(frLocation('Decathlon Arena - Stade Pierre-Mauroy, Villeneuve d&apos;Ascq'), "Decathlon Arena - Stade Pierre-Mauroy, Villeneuve d'Ascq");
+  assert.equal(frLocation('Wembley Stadium, London'), 'Wembley Stadium, Londres');
+});

@@ -614,6 +614,7 @@ function openSourceForm(existing) {
       <label class="field"><span>Lien du calendrier (.ics ou webcal://)</span><input name="url" type="url" value="${esc(existing?.url)}" placeholder="https://…/calendar.ics" autocapitalize="off" spellcheck="false"></label>
       <label class="field"><span>Nom</span><input name="name" value="${esc(existing?.name)}" placeholder="Ex. : Ligue 1, Concerts…"></label>
       <div class="field"><span>Couleur</span><div class="swatches">${COLORS.map((c) => `<button type="button" data-color="${c}" class="${c === color ? 'on' : ''}" style="background:${c};color:${c}" aria-label="Couleur"></button>`).join('')}</div></div>
+      <div class="toggle"><span>Traduire en français</span><label class="switch"><input type="checkbox" name="translate" ${existing?.translate === false ? '' : 'checked'}><i></i></label></div>
       ${existing ? `<div class="toggle"><span>Afficher dans Radar</span><label class="switch"><input type="checkbox" name="enabled" ${existing.enabled !== false ? 'checked' : ''}><i></i></label></div>` : ''}
     </div>
     <div class="err-msg" data-err hidden></div>
@@ -633,8 +634,9 @@ function openSourceForm(existing) {
       let name = f('name').value.trim();
       if (existing) {
         const enabled = f('enabled').checked;
+        const translate = f('translate').checked;
         closeSheet();
-        await mutate((c) => { const s = c.sources.find((x) => x.id === existing.id); if (s) Object.assign(s, { url, name: name || s.name, color, enabled }); }, url === existing.url ? 'Calendrier mis à jour' : null);
+        await mutate((c) => { const s = c.sources.find((x) => x.id === existing.id); if (s) Object.assign(s, { url, name: name || s.name, color, enabled, translate }); }, url === existing.url ? 'Calendrier mis à jour' : null);
         if (url !== existing.url && enabled) syncNow([existing.id]);
         return;
       }
@@ -642,7 +644,7 @@ function openSourceForm(existing) {
       const parsed = await tryDirectFetch({ url });
       if (parsed && parsed.error) { err.textContent = parsed.error; err.hidden = false; btn.innerHTML = '<b>Ajouter</b>'; btn.disabled = false; return; }
       if (!name) name = parsed?.calName || (() => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return 'Calendrier'; } })();
-      const src = { id: uid(), name, url, color, enabled: true, addedAt: new Date().toISOString() };
+      const src = { id: uid(), name, url, color, enabled: true, translate: f('translate').checked, addedAt: new Date().toISOString() };
       closeSheet();
       if (S.tab !== 'sources') { S.tab = 'sources'; LS.set('tab', 'sources'); }
       if (!parsed) S.syncing[src.id] = true;
