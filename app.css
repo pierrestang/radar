@@ -338,3 +338,4 @@ body > canvas + .tabbar { margin-top: calc(var(--safe-top) + var(--e-3)); }
 .toolbar .search { flex: 1; min-width: 0; }
 .toolbar .iconbtn { width: 36px; height: 36px; }
 #app > .toolbar + .chips { margin-top: var(--e-2); }
+.next-list { display: grid; gap: var(--e-2); }

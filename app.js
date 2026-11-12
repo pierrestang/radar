@@ -319,12 +319,12 @@ function header(title, sub, buttons) {
 
 function allEvents() { return mergedEvents(S.config, S.remote); }
 
-function nextCard(ev) {
+function nextCard(ev, label = 'Prochain') {
   const c = countdown(ev);
   const nc = catById(ev.category);
   const bg = nc ? ` style="--card:${esc(nc.color)}"` : '';
   return `<button class="next ${nc ? 'cat' : ''} art-${artOf(nc)}" data-ev="${esc(ev.icsUid)}"${bg}>${artSvg(artOf(nc))}
-    <div class="k">Prochain</div><div class="t">${esc(ev.title)}</div>
+    <div class="k">${esc(label)}</div><div class="t">${esc(ev.title)}</div>
     <div class="w">${esc(dayLabel(evDayKey(ev)))}${ev.allDay ? '' : ' · ' + fmtTime(ev.start)}${ev.location ? ' · ' + esc(ev.location) : ''}</div>
     <div class="count"><b>${c.n}</b><span>${c.u}</span></div></button>`;
 }
@@ -338,7 +338,7 @@ function eventRow(e, now = Date.now(), withDay = false) {
     <div><div class="title">${esc(e.title)}</div>${meta ? `<div class="meta">${meta}</div>` : ''}</div></button>`;
 }
 
-/** Accueil : les événements du jour, complétés par les suivants (au moins 3), le prochain en grand. */
+/** Accueil : les événements du jour, complétés par les suivants (au moins 3), chacun en carte de rubrique. */
 function viewHome() {
   const now = Date.now();
   const todayKey = localDateKey(new Date());
@@ -351,13 +351,9 @@ function viewHome() {
   if (!items.length) {
     return html + `<div class="empty">${ICON.radar}<h3>Rien sur le radar</h3><p>Ajoute un événement ou lie un calendrier.</p></div>`;
   }
-  // en grand : le prochain qui n'a pas encore commencé (sinon le premier)
+  // chacun dans une carte aux couleurs de sa rubrique, dans l'ordre chronologique
   const nextEv = items.find((e) => evStartLocalMs(e) > now) || items[0];
-  html += nextCard(nextEv);
-  const rest = items.filter((e) => e !== nextEv);
-  const today = rest.filter(isToday), later = rest.filter((e) => !isToday(e));
-  if (today.length) html += `<section class="day"><h2 class="today">Aujourd'hui</h2><div class="card">${today.map((e) => eventRow(e, now)).join('')}</div></section>`;
-  if (later.length) html += `<section class="day"><h2>Ensuite</h2><div class="card">${later.map((e) => eventRow(e, now, true)).join('')}</div></section>`;
+  html += `<div class="next-list">${items.map((e) => nextCard(e, evStartLocalMs(e) <= now ? 'En cours' : e === nextEv ? 'Prochain' : 'Ensuite')).join('')}</div>`;
   return html;
 }
 
