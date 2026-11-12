@@ -394,7 +394,7 @@ function viewSources() {
         <div class="grow"><div class="name">${esc(s.name)}</div><div class="info ${cls}">${esc(info)}</div></div>${ICON.chev}</button>`;
     }).join('')}</div>`;
   }
-  html += `<p class="note">Chaque agenda est lu dès son ajout, puis relu automatiquement toutes les ${SYNC_EVERY} environ. Les liens <b>webcal://</b> sont acceptés.</p>`;
+  html += `<p class="note">Mis à jour toutes les ${SYNC_EVERY}.</p>`;
 
   const all = allEvents();
   html += `<div class="section-title">Rubriques</div><div class="card">${cats().map((c) => {
@@ -413,7 +413,7 @@ function viewShare() {
   let html = header('Abonnement', 'Suivre Radar dans tes agendas');
   html += `<div class="section-title">Google Agenda</div>
     <div class="card"><div class="row"><span class="dot" style="width:12px;height:12px"></span>
-      <div class="grow"><div class="name">Connecté</div><div class="info">Mis à jour automatiquement en moins d'une minute.</div></div></div></div>
+      <div class="grow"><div class="name">Connecté</div></div></div></div>
     <div class="section-title">Lien</div>
     <div class="url-row"><div class="url-box" id="icsurl">${esc(url || 'Lien disponible après la première synchro…')}</div>
       <button class="iconbtn" data-act="copy" aria-label="Copier le lien" title="Copier le lien">${ICON.copy}</button></div>`;
