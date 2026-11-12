@@ -103,7 +103,6 @@ function persist() {
 
 const ICON = {
   radar: '<svg class="logo" viewBox="0 0 96 96" style="color:var(--accent)"><circle cx="48" cy="48" r="44" fill="var(--accent-soft)" stroke="none"/><circle cx="48" cy="48" r="32" opacity=".45"/><circle cx="48" cy="48" r="18" opacity=".7"/><path d="M48 48 L80 30" stroke-width="3"/><circle cx="48" cy="48" r="4" fill="currentColor" stroke="none"/><circle cx="66" cy="62" r="4.5" fill="currentColor" stroke="none"/><circle cx="34" cy="30" r="3" fill="currentColor" stroke="none" opacity=".7"/></svg>',
-  rings: '<svg class="rings" viewBox="0 0 200 200"><circle cx="100" cy="100" r="96" stroke-width="3"/><circle cx="100" cy="100" r="66" stroke-width="3"/><circle cx="100" cy="100" r="36" stroke-width="3"/></svg>',
   refresh: '<svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.6-4.5M4 4v3.5h3.5M4 13a8 8 0 0 0 14.6 4.5M20 20v-3.5h-3.5"/></svg>',
   search: '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg>',
   pen: '<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/></svg>',
@@ -128,6 +127,22 @@ function bindCatPicker(root, onPick) {
     onPick(b.dataset.cat || null);
   }));
 }
+
+/* Illustrations de fond par rubrique (viewBox 100×100, trait). */
+const ART = {
+  ballon: { label: 'Ballon', svg: '<circle cx="50" cy="50" r="44"/><path d="M50 33 66 44.5 60 63H40l-6-18.5Z" fill="currentColor"/><path d="M50 33V6.5M66 44.5l25-8M60 63l15.5 21.5M40 63 24.5 84.5M34 44.5l-25-8"/><path d="M38 9.5 50 6.5l12 3M86 27l5 9.5-1.5 12M84 75l-8.5 9.5L64 89M36 89l-11.5-4.5L16 75M10.5 48.5 9 36.5 14 27"/>' },
+  manette: { label: 'Manette', svg: '<path d="M31 30h38c11 0 18.5 8 20.5 19.5l4 19c2 10-4.5 17.5-12.5 17.5-6.5 0-10-4.5-13-9.5l-3-5H35l-3 5c-3 5-6.5 9.5-13 9.5-8 0-14.5-7.5-12.5-17.5l4-19C12.5 38 20 30 31 30Z"/><path d="M28 44v16M20 52h16"/><circle cx="70" cy="46" r="3.5" fill="currentColor"/><circle cx="78" cy="54" r="3.5" fill="currentColor"/><circle cx="62" cy="54" r="3.5" fill="currentColor"/><circle cx="70" cy="62" r="3.5" fill="currentColor"/>' },
+  clap: { label: 'Clap', svg: '<rect x="12" y="42" width="76" height="46" rx="5"/><path d="M12 42h76"/><path d="m10 36 74-17 3 12-74 17Z"/><path d="m24 33 9 11M41 29l9 11M58 25l9 11M75 21l8 10"/><path d="M24 58h52M24 70h34"/>' },
+  tele: { label: 'Télé', svg: '<rect x="10" y="28" width="80" height="54" rx="8"/><rect x="18" y="36" width="52" height="38" rx="4"/><path d="m36 12 14 16 14-16M34 90h32"/><circle cx="80" cy="44" r="3" fill="currentColor"/><circle cx="80" cy="56" r="3" fill="currentColor"/>' },
+  lecture: { label: 'Lecture', svg: '<rect x="8" y="20" width="84" height="60" rx="16"/><path d="M42 36v28l24-14Z" fill="currentColor"/>' },
+  musique: { label: 'Musique', svg: '<path d="M38 74V22l46-10v52"/><circle cx="27" cy="74" r="11"/><circle cx="73" cy="64" r="11"/><path d="M38 36l46-10"/>' },
+  ticket: { label: 'Billet', svg: '<path d="M10 30h80v12a8 8 0 0 0 0 16v12H10V58a8 8 0 0 0 0-16Z"/><path d="M64 30v40" stroke-dasharray="4 5"/><path d="m33 41 3.5 7 7.5 1-5.5 5.5 1.5 7.5-7-3.5-7 3.5 1.5-7.5L22 49l7.5-1Z" fill="currentColor"/>' },
+  etoile: { label: 'Étoile', svg: '<path d="m50 8 12.5 26 28.5 4-20.5 20 5 28.5L50 73 24.5 86.5l5-28.5L9 38l28.5-4Z"/>' },
+  radar: { label: 'Radar', svg: '<circle cx="50" cy="50" r="46"/><circle cx="50" cy="50" r="31"/><circle cx="50" cy="50" r="16"/><path d="M50 50 83 30"/><circle cx="50" cy="50" r="3" fill="currentColor"/>' },
+};
+const DEFAULT_ART = { sport: 'ballon', jeux: 'manette', film: 'clap', serie: 'tele', video: 'lecture' };
+const artOf = (cat) => (cat && (cat.icon || DEFAULT_ART[cat.id])) || 'radar';
+const artSvg = (key, cls = 'art') => `<svg class="${cls}" viewBox="0 0 100 100" aria-hidden="true">${(ART[key] || ART.radar).svg}</svg>`;
 
 /* ================= Données ================= */
 async function load({ quiet = false } = {}) {
@@ -299,7 +314,9 @@ function viewAgenda() {
 
   if (nextEv) {
     const c = countdown(nextEv);
-    html += `<button class="next" data-ev="${esc(nextEv.icsUid)}">${ICON.rings}
+    const nc = catById(nextEv.category);
+    const bg = nc ? ` style="--card:${esc(nc.color)}"` : '';
+    html += `<button class="next ${nc ? 'cat' : ''} art-${artOf(nc)}" data-ev="${esc(nextEv.icsUid)}"${bg}>${artSvg(artOf(nc))}
       <div class="k">Prochain</div><div class="t">${esc(nextEv.title)}</div>
       <div class="w">${esc(dayLabel(evDayKey(nextEv)))}${nextEv.allDay ? '' : ' · ' + fmtTime(nextEv.start)}${nextEv.location ? ' · ' + esc(nextEv.location) : ''}</div>
       <div class="count"><b>${c.n}</b><span>${c.u}</span></div></button>`;
@@ -706,16 +723,21 @@ function openSourceForm(existing) {
 function openCatForm(existing) {
   const used = new Set(cats().map((c) => c.color));
   let color = existing?.color || COLORS.find((c) => !used.has(c)) || COLORS[0];
+  let icon = existing ? artOf(existing) : 'etoile';
   openSheet(`<div class="sheet-head"><button data-close>Annuler</button><h3>${existing ? 'Rubrique' : 'Nouvelle rubrique'}</h3><button data-save><b>${existing ? 'OK' : 'Ajouter'}</b></button></div>
     <div class="card">
       <label class="field"><span>Nom</span><input name="name" value="${esc(existing?.name)}" placeholder="Ex. : Concert, Expo…" maxlength="30"></label>
       <div class="field"><span>Couleur</span><div class="swatches">${COLORS.map((c) => `<button type="button" data-color="${c}" class="${c === color ? 'on' : ''}" style="background:${c};color:${c}" aria-label="Couleur"></button>`).join('')}</div></div>
+      <div class="field"><span>Illustration</span><div class="art-picker">${Object.entries(ART).map(([k, a]) => `<button type="button" data-icon="${k}" class="${k === icon ? 'on' : ''}" aria-label="${esc(a.label)}" title="${esc(a.label)}">${artSvg(k, 'mini')}</button>`).join('')}</div></div>
     </div>
     <div class="err-msg" data-err hidden></div>
     ${existing ? `<div class="btns"><button class="btn danger" data-del>Supprimer la rubrique</button></div><p class="note">Ses événements resteront dans Radar, sans rubrique.</p>` : ''}`, (sh) => {
     const name = sh.querySelector('[name="name"]');
     sh.querySelectorAll('[data-color]').forEach((b) => (b.onclick = () => {
       color = b.dataset.color; sh.querySelectorAll('[data-color]').forEach((x) => x.classList.toggle('on', x === b));
+    }));
+    sh.querySelectorAll('[data-icon]').forEach((b) => (b.onclick = () => {
+      icon = b.dataset.icon; sh.querySelectorAll('[data-icon]').forEach((x) => x.classList.toggle('on', x === b));
     }));
     if (!existing) setTimeout(() => name.focus(), 300);
     sh.querySelector('[data-close]').onclick = closeSheet;
@@ -727,8 +749,8 @@ function openCatForm(existing) {
       closeSheet();
       mutate((c) => {
         c.categories = categoriesOf(c).map((x) => ({ ...x }));
-        if (existing) { const x = c.categories.find((k) => k.id === existing.id); if (x) Object.assign(x, { name: n, color }); }
-        else c.categories.push({ id: uid(), name: n, color });
+        if (existing) { const x = c.categories.find((k) => k.id === existing.id); if (x) Object.assign(x, { name: n, color, icon }); }
+        else c.categories.push({ id: uid(), name: n, color, icon });
       }, existing ? 'Rubrique mise à jour' : 'Rubrique ajoutée');
     };
     const del = sh.querySelector('[data-del]');

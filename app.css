@@ -64,12 +64,27 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
   background: var(--accent); color: var(--accent-ink); border: 0; width: 100%; text-align: left; display: block;
 }
 .next .k { font-size: 12px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; opacity: .8; }
-.next .t { font-size: 22px; font-weight: 700; letter-spacing: -.01em; margin: 6px 0 4px; line-height: 1.2; padding-right: 64px; }
+.next .t { font-size: 22px; font-weight: 700; letter-spacing: -.01em; margin: 6px 0 4px; line-height: 1.2; }
 .next .w { font-size: 14px; opacity: .85; }
 .next .count { position: absolute; right: 16px; top: 16px; text-align: right; }
 .next .count b { display: block; font-size: 26px; line-height: 1; font-weight: 750; font-variant-numeric: tabular-nums; }
 .next .count span { font-size: 12px; opacity: .8; }
-.next .rings { position: absolute; right: -60px; bottom: -80px; width: 200px; height: 200px; opacity: .16; pointer-events: none; }
+.next.cat { background: linear-gradient(135deg, var(--card), color-mix(in srgb, var(--card) 68%, #000)); color: #fff; }
+.next > *:not(.art) { position: relative; }
+.next .count { position: absolute; }
+.next .art {
+  position: absolute; right: 84px; top: 50%; width: 124px; height: 124px; margin-top: -62px; pointer-events: none;
+  opacity: .2; stroke-width: 3.2; transform: rotate(-14deg); transform-origin: center;
+}
+.next .t, .next .w { padding-right: 64px; }
+@media (max-width: 420px) { .next:not(.art-radar) .art { right: 64px; width: 108px; height: 108px; margin-top: -54px; } }
+.next.art-radar .art { right: -60px; top: auto; bottom: -80px; width: 200px; height: 200px; margin-top: 0; transform: none; opacity: .16; stroke-width: 1.5; }
+.next.art-radar .t, .next.art-radar .w { padding-right: 64px; }
+.next .count { z-index: 1; }
+.art-picker { display: flex; flex-wrap: wrap; gap: 8px; padding: 6px 0 2px; }
+.art-picker button { width: 44px; height: 44px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); display: grid; place-items: center; }
+.art-picker button.on { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+.art-picker .mini { width: 26px; height: 26px; stroke-width: 6; }
 
 /* ---------- Recherche & filtres ---------- */
 .search { position: relative; margin-bottom: 10px; }
