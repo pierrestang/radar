@@ -243,7 +243,7 @@ body > canvas + .tabbar { margin-top: calc(var(--safe-top) + var(--e-3)); }
 
 .field { position: relative; display: block; padding: 10px var(--e-3); }
 .field + .field::before, .field + .toggle::before, .toggle + .field::before, .row + .field::before, .pair + .pair::before,
-.toggle + .pair::before, .pair + .toggle::before, .toggle + .toggle::before {
+.toggle + .pair::before, .pair + .toggle::before, .toggle + .toggle::before, .kv + .field::before {
   content: ""; position: absolute; top: 0; left: var(--e-3); right: 0; border-top: 1px solid var(--bordure); }
 .pair { position: relative; display: grid; grid-template-columns: 1fr 1fr; }
 .pair .field + .field::before { display: none; }
@@ -317,3 +317,10 @@ body > canvas + .tabbar { margin-top: calc(var(--safe-top) + var(--e-3)); }
 ::view-transition-new(feuille) { animation: .55s var(--glisse) .08s both monte; }
 @keyframes disparait { to { opacity: 0; } }
 @keyframes monte { from { opacity: 0; transform: translateY(24px); } }
+
+/* Contenu empilé dans une fiche (Synchro immédiate…) : mêmes écarts que la feuille */
+.stack > * + * { margin-top: var(--e-3); }
+.stack .section-title + * { margin-top: var(--e-2); }
+.stack .btns { margin-top: var(--e-2); }
+.stack [data-form] > * + * { margin-top: var(--e-2); }
+.stack [data-form] .btns { margin-top: var(--e-3); }

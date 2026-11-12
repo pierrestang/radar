@@ -244,30 +244,45 @@ async function syncNow(ids, { quietOk = false } = {}) {
 }
 
 function openSyncTokenSheet(retry) {
-  (retry ? openSheet : openPage)(`<div class="sheet-head"><button data-close>Plus tard</button><h3>Synchro immédiate</h3><span style="width:60px"></span></div>
-    <p class="note" style="margin-top:0">Lit un agenda dès son ajout. Nécessite un second jeton GitHub, limité à ce seul droit.</p>
-    <ol class="steps card">
-      <li><a href="https://github.com/settings/personal-access-tokens/new?name=Radar%20synchro&description=Lancer%20la%20synchro%20Radar&expires_in=none&actions=write" target="_blank" rel="noopener">Créer un jeton « fine-grained »</a>, nommé « Radar synchro », avec l'expiration la plus longue proposée.</li>
-      <li><b>Repository access</b> : « Only select repositories » › <b>radar</b>.</li>
-      <li><b>Permissions</b> › Repository › <b>Actions</b> : « Read and write ». Rien d'autre.</li>
-      <li>« Generate token », puis colle-le ci-dessous (il commence par <b>github_pat_</b>).</li>
-    </ol>
-    <div class="card" style="margin-top:12px"><label class="field"><span>Jeton de synchro</span>
-      <input name="st" type="password" placeholder="github_pat_…" autocomplete="off" autocapitalize="off" spellcheck="false"></label></div>
-    <div class="err-msg" data-err hidden></div>
-    <div class="btns"><button class="btn" data-ok>Activer</button></div>`, (sh) => {
+  const on = !!S.syncToken;
+  const tokenUrl = 'https://github.com/settings/personal-access-tokens/new?name=Radar%20synchro&description=Lancer%20la%20synchro%20Radar&expires_in=none&actions=write';
+  const form = `<div data-form ${on ? 'hidden' : ''}>
+      <div class="section-title">${on ? 'Nouveau jeton' : 'Activer en 3 étapes'}</div>
+      <div class="card">
+        <div class="kv"><span>1 · Créer le jeton sur GitHub</span><div><a class="inline-btn" href="${tokenUrl}" target="_blank" rel="noopener">Ouvrir GitHub ↗</a></div></div>
+        <div class="kv"><span>2 · Régler</span><div>Nom « Radar synchro » · expiration la plus longue<br>Dépôt <b>radar</b> uniquement · Actions : <b>Read and write</b></div></div>
+        <label class="field"><span>3 · Coller le jeton</span><input name="st" type="password" placeholder="github_pat_…" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+      </div>
+      <div class="err-msg" data-err hidden></div>
+      <div class="btns"><button class="btn" data-ok>Activer</button></div>
+    </div>`;
+  (retry ? openSheet : openPage)(`<div class="sheet-head"><button data-close>Fermer</button><h3>Synchro immédiate</h3><span style="width:56px"></span></div>
+    <div class="stack">
+      <div class="card"><div class="row"><span class="dot" style="width:10px;height:10px;background:${on ? 'var(--succes)' : 'var(--faint)'}"></span>
+        <div class="grow"><div class="name">${on ? 'Activée' : 'Désactivée'}</div>
+        <div class="info">${on ? 'Un agenda ajouté est lu tout de suite.' : `Sans elle, un agenda ajouté est lu sous ${SYNC_EVERY}.`}</div></div></div></div>
+      ${on ? `<div class="btns" data-actions><button class="btn ghost" data-replace>Remplacer le jeton</button><button class="btn danger" data-off>Désactiver</button></div>` : ''}
+      ${form}
+    </div>`, (sh) => {
     sh.querySelector('[data-close]').onclick = closeSheet;
+    const rep = sh.querySelector('[data-replace]');
+    if (rep) rep.onclick = () => { sh.querySelector('[data-actions]').hidden = true; sh.querySelector('[data-form]').hidden = false; sh.querySelector('[name="st"]').focus(); };
+    const off = sh.querySelector('[data-off]');
+    if (off) off.onclick = () => {
+      if (!confirm('Désactiver la synchro immédiate sur cet appareil ?')) return;
+      S.syncToken = null; LS.del('syncToken'); closeSheet(); render(); toast('Synchro immédiate désactivée');
+    };
     sh.querySelector('[data-ok]').onclick = async () => {
       const v = sh.querySelector('[name="st"]').value.trim();
       const err = sh.querySelector('[data-err]');
-      if (!v) return;
+      if (!v) { err.textContent = 'Colle le jeton.'; err.hidden = false; return; }
       const b = sh.querySelector('[data-ok]'); b.disabled = true; b.textContent = 'Vérification…';
       try {
         await dispatchSync(v);
-        S.syncToken = v; LS.set('syncToken', v); closeSheet(); toast('Synchro immédiate activée ✓');
+        S.syncToken = v; LS.set('syncToken', v); closeSheet(); render(); toast('Synchro immédiate activée ✓');
         if (retry) retry();
       } catch (e) {
-        err.textContent = e.status === 401 ? 'Jeton refusé.' : "Ce jeton n'a pas le droit de lancer la synchro : vérifie le dépôt « radar » et « Actions : Read and write ».";
+        err.textContent = e.status === 401 ? 'Jeton refusé.' : "Ce jeton ne peut pas lancer la synchro : vérifie le dépôt « radar » et « Actions : Read and write ».";
         err.hidden = false; b.disabled = false; b.textContent = 'Activer';
       }
     };
@@ -435,11 +450,13 @@ function viewSettings() {
   let html = '';
   // Organisation : rubriques
   const all = allEvents();
-  html += `<div class="section-title">Rubriques <span class="count-pill">${cats().length}</span></div><div class="card">${cats().map((c) => {
+  html += `<div class="section-head"><div class="section-title">Rubriques <span class="count-pill">${cats().length}</span></div>
+    <div class="head-btns"><button class="iconbtn sm" data-act="add-cat" aria-label="Nouvelle rubrique" title="Nouvelle rubrique"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button></div></div>
+    <div class="card">${cats().map((c) => {
     const n = all.filter((e) => e.category === c.id).length;
     return `<button class="row" data-catedit="${esc(c.id)}"><span class="dot" style="background:${esc(c.color)};width:12px;height:12px"></span>
       <div class="grow"><div class="name">${esc(c.name)}</div><div class="info">${n} événement${n > 1 ? 's' : ''}</div></div>${ICON.chev}</button>`;
-  }).join('')}<button class="row" data-act="add-cat"><div class="grow"><div class="name" style="color:var(--accent)">Nouvelle rubrique</div></div></button></div>`;
+  }).join('')}</div>`;
 
   // Publication : Google Agenda et lien
   html += `<div class="section-title">Publication</div>
