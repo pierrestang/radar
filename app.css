@@ -99,7 +99,10 @@ body > canvas + .tabbar { margin-top: calc(var(--safe-top) + var(--e-3)); }
 
 .next { position: relative; overflow: hidden; display: block; width: 100%; padding: var(--e-3); border: 0; border-radius: var(--r);
   text-align: left; background: var(--accent); color: var(--accent-texte); }
-.next.cat { background: linear-gradient(135deg, var(--card), color-mix(in srgb, var(--card) 68%, #000)); color: #fff; }
+.next.cat { /* la couleur de la rubrique, fondue dans les verts du fond et légèrement translucide */
+  --teinte: color-mix(in srgb, var(--card) 45%, #5f8f74);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--teinte) 82%, transparent), color-mix(in srgb, color-mix(in srgb, var(--teinte) 75%, #1f3d31) 88%, transparent));
+  -webkit-backdrop-filter: var(--flou); backdrop-filter: var(--flou); color: #fff; }
 .next > *:not(.art) { position: relative; }
 .next .k { font-size: var(--t-1); opacity: .75; }
 .next .t { margin: var(--e-1) 0; padding-right: 64px; font-family: var(--serif); font-weight: 400; font-size: var(--t-3); line-height: 1.2; letter-spacing: -.02em; }
