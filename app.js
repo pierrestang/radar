@@ -478,7 +478,7 @@ function bindView() {
 document.addEventListener('click', (e) => {
   const t = e.target.closest('[data-act],[data-ev],[data-src],[data-filter],[data-tab],[data-catedit]');
   if (!t) return;
-  if (t.dataset.tab) { S.tab = t.dataset.tab; LS.set('tab', S.tab); closeSheet(); render(); window.scrollTo(0, 0); return; }
+  if (t.dataset.tab) { goTab(t.dataset.tab); return; }
   if (t.dataset.catedit) { openCatForm(catById(t.dataset.catedit)); return; }
   if (t.dataset.filter) { S.filter = t.dataset.filter; render(); return; }
   if (t.dataset.ev) { const ev = allEvents().find((x) => x.icsUid === t.dataset.ev); if (ev) openDetail(ev); return; }
@@ -496,6 +496,36 @@ document.addEventListener('click', (e) => {
   else if (a === 'logout') logout();
 });
 $('#fab').onclick = () => openAddMenu();
+
+/* Onglets dans l'ordre du menu : flèches ← → du clavier, ou glissement du doigt vers la gauche / la droite. */
+const TABS = ['agenda', 'sources', 'settings'];
+function goTab(tab) {
+  if (!TABS.includes(tab) || tab === S.tab) return;
+  S.tab = tab; LS.set('tab', tab); closeSheet(); render(); window.scrollTo(0, 0);
+}
+function stepTab(dir) {
+  if (!(S.token && S.gistId) || !$('#sheet').hidden) return;
+  const i = TABS.indexOf(S.tab) + dir;
+  if (i >= 0 && i < TABS.length) goTab(TABS[i]);
+}
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+  if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+  if (e.target.closest('input, textarea, select, [contenteditable]')) return;
+  e.preventDefault();
+  stepTab(e.key === 'ArrowRight' ? 1 : -1);
+});
+let swipe = null;
+document.addEventListener('touchstart', (e) => {
+  const t = e.touches[0];
+  swipe = e.touches.length === 1 && !e.target.closest('.chips, input, textarea, .sheet') ? { x: t.clientX, y: t.clientY, at: Date.now() } : null;
+}, { passive: true });
+document.addEventListener('touchend', (e) => {
+  if (!swipe) return;
+  const t = e.changedTouches[0], dx = t.clientX - swipe.x, dy = t.clientY - swipe.y;
+  if (Date.now() - swipe.at < 600 && Math.abs(dx) > 70 && Math.abs(dx) > 2 * Math.abs(dy)) stepTab(dx < 0 ? 1 : -1);
+  swipe = null;
+}, { passive: true });
 $('#scrim').onclick = () => closeSheet();
 
 async function copyUrl(forGoogle = false) {
