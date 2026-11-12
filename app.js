@@ -294,7 +294,7 @@ function render() {
   const app = $('#app');
   const connected = S.token && S.gistId;
   $('#tabbar').hidden = !connected;
-  $('#fab').hidden = !connected || (S.tab !== 'agenda' && S.tab !== 'home');
+  $('#fab').hidden = !connected || S.tab !== 'agenda';
   document.querySelectorAll('#tabbar button').forEach((b) => b.classList.toggle('on', b.dataset.tab === S.tab));
   // Comme dans Fantôme : sur l'Accueil, le menu en haut puis le grand titre ; ailleurs, le titre
   // plus petit au-dessus du menu. Pendant un changement d'onglet, la transition fait glisser l'un et l'autre.
