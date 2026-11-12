@@ -1,0 +1,597 @@
+import ICAL from './vendor/ical.min.js';
+import { parseICS, buildICS, mergedEvents, normalizeUrl, emptyConfig, emptyRemote, startMs } from './shared/ics.js';
+import { findGist, readGist, writeGist, createGist } from './shared/gist.js';
+
+/* ================= État ================= */
+const LS = {
+  get(k, d = null) { try { const v = localStorage.getItem('radar.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem('radar.' + k, JSON.stringify(v)); } catch {} },
+  del(k) { try { localStorage.removeItem('radar.' + k); } catch {} },
+};
+
+const COLORS = ['#0B8A65', '#2F6FEB', '#E0573B', '#C2410C', '#9333EA', '#DB2777', '#0891B2', '#65A30D', '#CA8A04', '#64748B'];
+const SYNC_EVERY = '30 min';
+
+const S = {
+  token: LS.get('token'),
+  gistId: LS.get('gistId'),
+  config: LS.get('config') || emptyConfig(),
+  remote: LS.get('remote') || emptyRemote(),
+  icsUrl: LS.get('icsUrl'),
+  tab: LS.get('tab', 'agenda'),
+  filter: 'all',
+  query: '',
+  loading: false,
+  lastLoad: LS.get('lastLoad'),
+};
+
+/* ================= Utilitaires ================= */
+const $ = (s, r = document) => r.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+const pad = (n) => String(n).padStart(2, '0');
+const localDateKey = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const localTime = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const fmtTime = (iso) => new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit' }).format(new Date(iso));
+const keyToDate = (k) => { const [y, m, d] = k.split('-').map(Number); return new Date(y, m - 1, d); };
+const evDayKey = (ev) => (ev.allDay ? ev.start : localDateKey(new Date(ev.start)));
+const evEndMs = (ev) => {
+  if (ev.allDay) return keyToDate(ev.end && ev.end > ev.start ? ev.end : ev.start).getTime() + (ev.end && ev.end > ev.start ? 0 : 864e5);
+  return Date.parse(ev.end || ev.start);
+};
+const evStartLocalMs = (ev) => (ev.allDay ? keyToDate(ev.start).getTime() : Date.parse(ev.start));
+
+function dayLabel(key) {
+  const d = keyToDate(key);
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const diff = Math.round((d - today) / 864e5);
+  if (diff === 0) return "Aujourd'hui";
+  if (diff === 1) return 'Demain';
+  const opts = { weekday: 'long', day: 'numeric', month: 'long' };
+  if (d.getFullYear() !== today.getFullYear()) opts.year = 'numeric';
+  const s = new Intl.DateTimeFormat('fr-FR', opts).format(d);
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+function relDays(key) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const diff = Math.round((keyToDate(key) - today) / 864e5);
+  if (diff < 2) return '';
+  if (diff < 7) return `dans ${diff} j`;
+  if (diff < 60) return `dans ${Math.round(diff / 7)} sem.`;
+  return `dans ${Math.round(diff / 30)} mois`;
+}
+function countdown(ev) {
+  const ms = evStartLocalMs(ev) - Date.now();
+  if (ms <= 0) return { n: 'En', u: 'cours' };
+  const m = Math.round(ms / 6e4);
+  if (m < 60) return { n: m, u: 'min' };
+  const h = Math.round(m / 60);
+  if (h < 36) return { n: h, u: h > 1 ? 'heures' : 'heure' };
+  const d = Math.round(h / 24);
+  return { n: d, u: 'jours' };
+}
+function whenText(ev) {
+  const d = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  if (ev.allDay) {
+    const endIncl = ev.end && ev.end > ev.start ? new Date(keyToDate(ev.end).getTime() - 864e5) : keyToDate(ev.start);
+    const a = d.format(keyToDate(ev.start));
+    return localDateKey(endIncl) === ev.start ? `${a} · toute la journée` : `Du ${a} au ${d.format(endIncl)}`;
+  }
+  const s = new Date(ev.start), e = new Date(ev.end || ev.start);
+  if (localDateKey(s) === localDateKey(e)) return `${d.format(s)} · ${fmtTime(ev.start)} – ${fmtTime(ev.end || ev.start)}`;
+  return `${d.format(s)} ${fmtTime(ev.start)} → ${d.format(e)} ${fmtTime(ev.end)}`;
+}
+function ago(iso) {
+  if (!iso) return 'jamais';
+  const m = Math.round((Date.now() - Date.parse(iso)) / 6e4);
+  if (m < 1) return "à l'instant";
+  if (m < 60) return `il y a ${m} min`;
+  const h = Math.round(m / 60);
+  if (h < 48) return `il y a ${h} h`;
+  return `il y a ${Math.round(h / 24)} j`;
+}
+let toastTimer;
+function toast(msg, ms = 2600) {
+  const t = $('#toast'); t.textContent = msg; t.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.hidden = true), ms);
+}
+function persist() {
+  LS.set('config', S.config); LS.set('remote', S.remote); LS.set('icsUrl', S.icsUrl); LS.set('lastLoad', S.lastLoad);
+}
+
+const ICON = {
+  radar: '<svg class="logo" viewBox="0 0 96 96" style="color:var(--accent)"><circle cx="48" cy="48" r="44" fill="var(--accent-soft)" stroke="none"/><circle cx="48" cy="48" r="32" opacity=".45"/><circle cx="48" cy="48" r="18" opacity=".7"/><path d="M48 48 L80 30" stroke-width="3"/><circle cx="48" cy="48" r="4" fill="currentColor" stroke="none"/><circle cx="66" cy="62" r="4.5" fill="currentColor" stroke="none"/><circle cx="34" cy="30" r="3" fill="currentColor" stroke="none" opacity=".7"/></svg>',
+  rings: '<svg class="rings" viewBox="0 0 200 200"><circle cx="100" cy="100" r="96" stroke-width="3"/><circle cx="100" cy="100" r="66" stroke-width="3"/><circle cx="100" cy="100" r="36" stroke-width="3"/></svg>',
+  refresh: '<svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.6-4.5M4 4v3.5h3.5M4 13a8 8 0 0 0 14.6 4.5M20 20v-3.5h-3.5"/></svg>',
+  search: '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg>',
+  pen: '<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/></svg>',
+  link: '<svg viewBox="0 0 24 24"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/></svg>',
+  camera: '<svg viewBox="0 0 24 24"><path d="M4 8.5A1.5 1.5 0 0 1 5.5 7h2l1.5-2h6l1.5 2h2A1.5 1.5 0 0 1 20 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5v-9Z"/><circle cx="12" cy="13" r="3.5"/></svg>',
+  chev: '<svg class="chev" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></svg>',
+  google: '<svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="16" rx="3"/><path d="M3.5 9.5h17M8 2.5v4M16 2.5v4M9 15h6M12 12v6"/></svg>',
+  apple: '<svg viewBox="0 0 24 24"><rect x="6" y="2.5" width="12" height="19" rx="3"/><path d="M10.5 18.5h3"/></svg>',
+  copy: '<svg viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11" height="11" rx="2.5"/><path d="M15.5 8.5V6A1.5 1.5 0 0 0 14 4.5H6A1.5 1.5 0 0 0 4.5 6v8A1.5 1.5 0 0 0 6 15.5h2.5"/></svg>',
+};
+
+/* ================= Données ================= */
+async function load({ quiet = false } = {}) {
+  if (!S.token || !S.gistId || S.loading) return;
+  S.loading = true; if (!quiet) render();
+  try {
+    const g = await readGist(S.token, S.gistId);
+    if (LS.get('dirty')) {
+      // une modification faite hors ligne n'a pas été envoyée : on la publie maintenant
+      const remote = g.remote || S.remote;
+      await writeGist(S.token, S.gistId, { 'config.json': S.config, 'radar.ics': buildICS(S.config, remote) });
+      g.config = S.config; LS.del('dirty');
+      toast('Modifications hors ligne envoyées ✓');
+    }
+    S.config = { ...emptyConfig(), ...(g.config || {}) };
+    S.remote = g.remote || emptyRemote();
+    S.icsUrl = g.icsRawUrl;
+    S.lastLoad = new Date().toISOString();
+    persist();
+  } catch (err) {
+    if (err.status === 401 || err.status === 404) { toast(err.message, 5000); }
+    else if (!quiet) toast('Hors ligne : affichage de la dernière version.');
+  } finally { S.loading = false; render(); }
+}
+
+/** Applique une modification sur la config la plus récente, puis publie config.json + radar.ics. */
+let saving = Promise.resolve();
+function mutate(fn, okMsg) {
+  fn(S.config); persist(); render(); // optimiste
+  saving = saving.then(async () => {
+    try {
+      const g = await readGist(S.token, S.gistId);
+      const cfg = { ...emptyConfig(), ...(g.config || {}) };
+      fn(cfg);
+      const remote = g.remote || S.remote;
+      await writeGist(S.token, S.gistId, { 'config.json': cfg, 'radar.ics': buildICS(cfg, remote) });
+      S.config = cfg; S.remote = remote; LS.del('dirty'); persist(); render();
+      if (okMsg) toast(okMsg);
+    } catch (err) {
+      if (err.status === 401 || err.status === 404) toast("Échec de l'enregistrement : " + err.message, 5000);
+      else { LS.set('dirty', true); toast('Hors ligne : la modification sera envoyée au prochain lancement.', 4000); }
+    }
+  });
+  return saving;
+}
+
+/** Essaie de lire un flux directement depuis le téléphone (possible si le serveur autorise CORS). */
+async function tryDirectFetch(src) {
+  try {
+    const res = await fetch(normalizeUrl(src.url), { cache: 'no-store' });
+    if (!res.ok) return null;
+    const text = await res.text();
+    if (!/BEGIN:VCALENDAR/i.test(text)) return { error: "Ce lien ne renvoie pas un calendrier .ics" };
+    return parseICS(text, ICAL);
+  } catch { return null; } // CORS bloqué : la synchro GitHub s'en chargera
+}
+
+async function publishRemoteFor(src, parsed) {
+  const g = await readGist(S.token, S.gistId);
+  const remote = g.remote || emptyRemote();
+  remote.sources = remote.sources || {};
+  remote.sources[src.id] = { fetchedAt: new Date().toISOString(), calName: parsed.calName, error: null, events: parsed.events, via: 'app' };
+  const cfg = { ...emptyConfig(), ...(g.config || {}) };
+  await writeGist(S.token, S.gistId, { 'remote.json': remote, 'radar.ics': buildICS(cfg, remote) });
+  S.remote = remote; S.config = cfg; persist(); render();
+}
+
+/* ================= Rendu ================= */
+function render() {
+  const app = $('#app');
+  const connected = S.token && S.gistId;
+  $('#tabbar').hidden = !connected;
+  $('#fab').hidden = !connected || S.tab === 'share';
+  document.querySelectorAll('#tabbar button').forEach((b) => b.classList.toggle('on', b.dataset.tab === S.tab));
+  if (!connected) { app.innerHTML = viewSetup(); bindSetup(); return; }
+  if (S.tab === 'sources') app.innerHTML = viewSources();
+  else if (S.tab === 'share') app.innerHTML = viewShare();
+  else app.innerHTML = viewAgenda();
+  bindView();
+}
+
+function header(title, sub) {
+  return `<header class="head"><div><h1>${esc(title)}</h1>${sub ? `<div class="sub">${sub}</div>` : ''}</div>
+    <button class="iconbtn ${S.loading ? 'spin' : ''}" data-act="reload" aria-label="Actualiser">${ICON.refresh}</button></header>`;
+}
+
+function allEvents() { return mergedEvents(S.config, S.remote); }
+
+function viewAgenda() {
+  const now = Date.now();
+  const startToday = new Date(); startToday.setHours(0, 0, 0, 0);
+  let evs = allEvents().filter((e) => evEndMs(e) > startToday.getTime());
+  const sources = (S.config.sources || []).filter((s) => s.enabled !== false);
+  if (S.filter === 'manual') evs = evs.filter((e) => e.origin !== 'feed');
+  else if (S.filter !== 'all') evs = evs.filter((e) => e.sourceId === S.filter);
+  if (S.query) {
+    const q = S.query.toLowerCase();
+    evs = evs.filter((e) => [e.title, e.location, e.notes, e.sourceName].some((x) => x && x.toLowerCase().includes(q)));
+  }
+  const upcoming = evs.filter((e) => evEndMs(e) > now);
+  const nextEv = !S.query && upcoming.find((e) => !e.allDay || e.start >= localDateKey(new Date()));
+  const sub = `<span class="sync-pill ${S.lastLoad ? '' : 'off'}"><i></i>${upcoming.length} à venir · ${S.loading ? 'actualisation…' : 'à jour ' + ago(S.lastLoad)}</span>`;
+
+  let html = header('Radar', sub);
+
+  if (nextEv) {
+    const c = countdown(nextEv);
+    html += `<button class="next" data-ev="${esc(nextEv.icsUid)}">${ICON.rings}
+      <div class="k">Prochain</div><div class="t">${esc(nextEv.title)}</div>
+      <div class="w">${esc(dayLabel(evDayKey(nextEv)))}${nextEv.allDay ? '' : ' · ' + fmtTime(nextEv.start)}${nextEv.location ? ' · ' + esc(nextEv.location) : ''}</div>
+      <div class="count"><b>${c.n}</b><span>${c.u}</span></div></button>`;
+  }
+
+  if (allEvents().length || S.query) {
+    html += `<label class="search">${ICON.search}<input id="q" type="search" placeholder="Rechercher" value="${esc(S.query)}" autocomplete="off"></label>`;
+    if (sources.length) {
+      html += `<div class="chips">
+        <button class="chip ${S.filter === 'all' ? 'on' : ''}" data-filter="all">Tout</button>
+        <button class="chip ${S.filter === 'manual' ? 'on' : ''}" data-filter="manual"><span class="dot"></span>Mes ajouts</button>
+        ${sources.map((s) => `<button class="chip ${S.filter === s.id ? 'on' : ''}" data-filter="${esc(s.id)}"><span class="dot" style="background:${esc(s.color)}"></span>${esc(s.name)}</button>`).join('')}
+      </div>`;
+    }
+  }
+
+  if (!evs.length) {
+    html += S.query || S.filter !== 'all'
+      ? `<div class="empty"><p>Aucun événement ne correspond.</p></div>`
+      : `<div class="empty">${ICON.radar}<h3>Rien sur le radar</h3><p>Ajoute un événement à la main ou colle le lien d'un calendrier (Sync2Cal, Google, sport…).</p>
+          <button class="btn" data-act="add" style="max-width:260px;margin:0 auto">Ajouter</button></div>`;
+    return html;
+  }
+
+  const groups = new Map();
+  for (const e of evs) {
+    // un événement sur plusieurs jours déjà commencé apparaît aujourd'hui
+    let k = evDayKey(e);
+    if (k < localDateKey(new Date())) k = localDateKey(new Date());
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(e);
+  }
+  const todayKey = localDateKey(new Date());
+  let shown = 0;
+  for (const [k, list] of groups) {
+    if (shown > 400) break;
+    shown += list.length;
+    html += `<section class="day"><h2 class="${k === todayKey ? 'today' : ''}">${esc(dayLabel(k))}<em>${relDays(k)}</em></h2><div class="card">`;
+    for (const e of list) {
+      const past = evEndMs(e) <= now;
+      const time = e.allDay ? `<div class="time">Jour<small>entier</small></div>`
+        : `<div class="time">${fmtTime(e.start)}${e.end && e.end !== e.start ? `<small>${fmtTime(e.end)}</small>` : ''}</div>`;
+      const meta = [e.location && `<span>${esc(e.location)}</span>`, e.sourceName && `<span>${esc(e.sourceName)}</span>`].filter(Boolean).join('');
+      html += `<button class="ev ${past ? 'past' : ''}" data-ev="${esc(e.icsUid)}">${time}
+        <div class="bar" style="background:${esc(e.color || 'var(--accent)')}"></div>
+        <div><div class="title">${esc(e.title)}</div>${meta ? `<div class="meta">${meta}</div>` : ''}</div></button>`;
+    }
+    html += `</div></section>`;
+  }
+  return html;
+}
+
+function viewSources() {
+  const srcs = S.config.sources || [];
+  const manualCount = (S.config.manual || []).length;
+  let html = header('Sources', `${srcs.length} calendrier${srcs.length > 1 ? 's' : ''} lié${srcs.length > 1 ? 's' : ''} · ${manualCount} ajout${manualCount > 1 ? 's' : ''} manuel${manualCount > 1 ? 's' : ''}`);
+  html += `<div class="section-title">Calendriers liés</div>`;
+  if (!srcs.length) {
+    html += `<div class="card"><button class="row" data-act="add-source"><div class="grow"><div class="name">Coller un lien de calendrier</div><div class="info">Sync2Cal, Google Agenda, club de sport, billetterie…</div></div>${ICON.chev}</button></div>`;
+  } else {
+    html += `<div class="card">${srcs.map((s) => {
+      const r = S.remote.sources?.[s.id];
+      let info, cls = '';
+      if (s.enabled === false) info = 'Masqué';
+      else if (!r) info = `En attente de la première synchro (≤ ${SYNC_EVERY})`;
+      else if (r.error) { info = `Erreur : ${r.error}`; cls = 'err'; }
+      else info = `${r.events.length} événement${r.events.length > 1 ? 's' : ''} · synchro ${ago(r.fetchedAt)}`;
+      return `<button class="row" data-src="${esc(s.id)}"><span class="dot" style="background:${esc(s.color)};width:12px;height:12px"></span>
+        <div class="grow"><div class="name">${esc(s.name)}</div><div class="info ${cls}">${esc(info)}</div></div>${ICON.chev}</button>`;
+    }).join('')}</div>
+    <div class="btns"><button class="btn ghost" data-act="add-source">${ICON.link} Ajouter un calendrier</button></div>`;
+  }
+  html += `<p class="note">Les liens sont relus automatiquement toutes les ${SYNC_EVERY} environ. Les liens <b>webcal://</b> sont acceptés.</p>`;
+
+  html += `<div class="section-title">Autres entrées</div><div class="card">
+    <button class="row" data-act="add-manual"><div class="grow"><div class="name">Saisie manuelle</div><div class="info">${manualCount} événement${manualCount > 1 ? 's' : ''}</div></div>${ICON.chev}</button>
+    <div class="row" style="opacity:.55"><div class="grow"><div class="name">Capture d'écran <span class="badge">BIENTÔT</span></div><div class="info">Lire une affiche ou un billet pour en extraire l'événement</div></div></div>
+  </div>`;
+  return html;
+}
+
+function viewShare() {
+  const url = S.icsUrl;
+  const webcal = url ? url.replace(/^https:\/\//, 'webcal://') : '';
+  const gcal = url ? `https://calendar.google.com/calendar/u/0/r?cid=${encodeURIComponent(webcal)}` : '#';
+  let html = header('Abonnement', 'Suivre Radar dans tes agendas');
+  html += `<div class="section-title">Lien du calendrier fusionné</div>
+    <div class="url-box" id="icsurl">${esc(url || 'Lien disponible après la première synchro…')}</div>
+    <div class="btns" style="margin-top:0">
+      <a class="btn" href="${esc(gcal)}" target="_blank" rel="noopener">${ICON.google} Ajouter à Google Agenda</a>
+      <a class="btn ghost" href="${esc(webcal)}">${ICON.apple} S'abonner sur cet iPhone</a>
+      <button class="btn ghost" data-act="copy">${ICON.copy} Copier le lien</button>
+    </div>
+    <p class="note">Si tu ajoutes Radar à Google Agenda, il apparaîtra aussi sur ton iPhone via ton compte Google : inutile de t'abonner deux fois. Google relit les agendas abonnés à son rythme (souvent quelques heures) ; l'iPhone peut être réglé dans Réglages › Calendrier › Comptes › Abonnements.</p>
+    <p class="note">Garde ce lien pour toi : toute personne qui l'a peut voir ton agenda.</p>`;
+
+  html += `<div class="section-title">Réglages</div><div class="card">
+    <label class="field"><span>Nom du calendrier</span><input id="calname" value="${esc(S.config.calendarName || 'Radar')}" maxlength="60"></label>
+  </div>
+  <div class="card" style="margin-top:12px">
+    <button class="row" data-act="logout"><div class="grow"><div class="name" style="color:var(--danger)">Déconnecter cet appareil</div><div class="info">Tes données restent dans ton Gist GitHub.</div></div></button>
+  </div>
+  <p class="note">Données : <a href="https://gist.github.com/${esc(S.gistId)}" target="_blank" rel="noopener">Gist secret</a>.</p>`;
+  return html;
+}
+
+function viewSetup() {
+  return `<div class="hero">${ICON.radar}<h1>Radar</h1><p>Tous tes événements à venir réunis dans un seul agenda, suivi depuis Google Agenda et ton iPhone.</p></div>
+  <div class="section-title">Connexion (une seule fois)</div>
+  <ol class="steps card">
+    <li><a href="https://github.com/settings/tokens/new?scopes=gist&description=Radar" target="_blank" rel="noopener">Créer un jeton GitHub</a> : laisse uniquement la case <b>gist</b> cochée, choisis « No expiration », puis « Generate token ».</li>
+    <li>Copie le jeton (il commence par <b>ghp_</b>) et colle-le ci-dessous.</li>
+  </ol>
+  <div class="card" style="margin-top:12px"><label class="field"><span>Jeton GitHub</span>
+    <input id="tok" type="password" placeholder="ghp_…" autocomplete="off" autocapitalize="off" spellcheck="false"></label></div>
+  <div class="err-msg" id="setup-err" hidden></div>
+  <div class="btns"><button class="btn" id="connect">Connecter</button></div>
+  <p class="note">Le jeton reste sur cet appareil. Tes données sont stockées dans un Gist secret de ton compte GitHub. Sur iPhone, fais cette étape <b>depuis l'app ajoutée à l'écran d'accueil</b> (Partager › Sur l'écran d'accueil).</p>`;
+}
+
+/* ================= Interactions ================= */
+function bindSetup() {
+  $('#connect').onclick = async () => {
+    const tok = $('#tok').value.trim();
+    const errEl = $('#setup-err');
+    if (!tok) return;
+    const btn = $('#connect'); btn.disabled = true; btn.textContent = 'Connexion…'; errEl.hidden = true;
+    try {
+      let id = await findGist(tok);
+      if (!id) {
+        const cfg = emptyConfig(), rem = emptyRemote();
+        const g = await createGist(tok, { 'config.json': cfg, 'remote.json': rem, 'radar.ics': buildICS(cfg, rem) });
+        id = g.id;
+      }
+      S.token = tok; S.gistId = id; LS.set('token', tok); LS.set('gistId', id);
+      await load();
+      toast('Connecté ✓');
+    } catch (err) {
+      errEl.textContent = err.status === 401 ? 'Jeton refusé : vérifie qu’il est complet et que la case « gist » est cochée.' : err.message;
+      errEl.hidden = false; btn.disabled = false; btn.textContent = 'Connecter';
+    }
+  };
+}
+
+function bindView() {
+  const q = $('#q');
+  if (q) q.oninput = () => { S.query = q.value; const pos = q.selectionStart; render(); const n = $('#q'); n.focus(); n.setSelectionRange(pos, pos); };
+  const cn = $('#calname');
+  if (cn) cn.onchange = () => { const v = cn.value.trim() || 'Radar'; mutate((c) => { c.calendarName = v; }, 'Nom mis à jour'); };
+}
+
+document.addEventListener('click', (e) => {
+  const t = e.target.closest('[data-act],[data-ev],[data-src],[data-filter],[data-tab]');
+  if (!t) return;
+  if (t.dataset.tab) { S.tab = t.dataset.tab; LS.set('tab', S.tab); closeSheet(); render(); window.scrollTo(0, 0); return; }
+  if (t.dataset.filter) { S.filter = t.dataset.filter; render(); return; }
+  if (t.dataset.ev) { const ev = allEvents().find((x) => x.icsUid === t.dataset.ev); if (ev) openDetail(ev); return; }
+  if (t.dataset.src) { const s = S.config.sources.find((x) => x.id === t.dataset.src); if (s) openSourceForm(s); return; }
+  const a = t.dataset.act;
+  if (a === 'reload') load();
+  else if (a === 'add') openAddMenu();
+  else if (a === 'add-source') openSourceForm();
+  else if (a === 'add-manual') openEventForm();
+  else if (a === 'copy') copyUrl();
+  else if (a === 'logout') logout();
+});
+$('#fab').onclick = () => (S.tab === 'sources' ? openSourceForm() : openAddMenu());
+$('#scrim').onclick = () => closeSheet();
+
+async function copyUrl() {
+  if (!S.icsUrl) return;
+  try { await navigator.clipboard.writeText(S.icsUrl); toast('Lien copié'); }
+  catch { const r = document.createRange(); r.selectNodeContents($('#icsurl')); getSelection().removeAllRanges(); getSelection().addRange(r); toast('Lien sélectionné : copie-le'); }
+}
+function logout() {
+  if (!confirm('Déconnecter Radar de cet appareil ?')) return;
+  ['token', 'gistId', 'config', 'remote', 'icsUrl', 'lastLoad', 'dirty'].forEach(LS.del);
+  Object.assign(S, { token: null, gistId: null, config: emptyConfig(), remote: emptyRemote(), icsUrl: null, lastLoad: null, tab: 'agenda' });
+  render();
+}
+
+/* ---------- Feuilles ---------- */
+function openSheet(html, onMount) {
+  const sh = $('#sheet');
+  sh.innerHTML = `<div class="grab"></div>${html}`;
+  sh.hidden = false; $('#scrim').hidden = false; document.body.style.overflow = 'hidden';
+  sh.scrollTop = 0;
+  onMount && onMount(sh);
+}
+function closeSheet() {
+  $('#sheet').hidden = true; $('#scrim').hidden = true; document.body.style.overflow = '';
+}
+
+function openAddMenu() {
+  openSheet(`<div class="sheet-head"><h3>Ajouter à Radar</h3><button data-close>Fermer</button></div>
+    <div class="card">
+      <button class="choice" data-c="manual"><span class="ic">${ICON.pen}</span><span><b>Saisir un événement</b><small>Titre, date, lieu…</small></span></button>
+      <button class="choice" data-c="source"><span class="ic">${ICON.link}</span><span><b>Coller un lien de calendrier</b><small>Sync2Cal, Google, webcal://…</small></span></button>
+      <button class="choice" disabled><span class="ic">${ICON.camera}</span><span><b>Depuis une capture d'écran<span class="badge">BIENTÔT</span></b><small>Extraire l'événement d'une image</small></span></button>
+    </div>`, (sh) => {
+    sh.querySelector('[data-close]').onclick = closeSheet;
+    sh.querySelector('[data-c="manual"]').onclick = () => openEventForm();
+    sh.querySelector('[data-c="source"]').onclick = () => openSourceForm();
+  });
+}
+
+function openEventForm(existing) {
+  const now = new Date(); now.setMinutes(0, 0, 0); now.setHours(now.getHours() + 1);
+  let sDate, sTime, eDate, eTime, allDay = false;
+  if (existing) {
+    allDay = existing.allDay;
+    if (allDay) {
+      sDate = existing.start; const endIncl = new Date(keyToDate(existing.end || existing.start).getTime() - (existing.end > existing.start ? 864e5 : 0));
+      eDate = localDateKey(endIncl); sTime = '20:00'; eTime = '21:00';
+    } else {
+      const s = new Date(existing.start), e = new Date(existing.end || existing.start);
+      sDate = localDateKey(s); sTime = localTime(s); eDate = localDateKey(e); eTime = localTime(e);
+    }
+  } else {
+    const end = new Date(now.getTime() + 36e5);
+    sDate = localDateKey(now); sTime = localTime(now); eDate = localDateKey(end); eTime = localTime(end);
+  }
+  const v = existing || {};
+  openSheet(`<div class="sheet-head"><button data-close>Annuler</button><h3>${existing ? 'Modifier' : 'Nouvel événement'}</h3><button data-save><b>${existing ? 'OK' : 'Ajouter'}</b></button></div>
+    <div class="card">
+      <label class="field"><span>Titre</span><input name="title" value="${esc(v.title)}" placeholder="Concert, match, expo…" enterkeyhint="done"></label>
+      <label class="field"><span>Lieu</span><input name="location" value="${esc(v.location)}" placeholder="Facultatif"></label>
+    </div>
+    <div class="card" style="margin-top:12px">
+      <div class="toggle"><span>Toute la journée</span><label class="switch"><input type="checkbox" name="allDay" ${allDay ? 'checked' : ''}><i></i></label></div>
+      <div class="pair"><label class="field"><span>Début</span><input type="date" name="sDate" value="${sDate}"></label><label class="field" data-t><span>Heure</span><input type="time" name="sTime" value="${sTime}"></label></div>
+      <div class="pair"><label class="field"><span>Fin</span><input type="date" name="eDate" value="${eDate}"></label><label class="field" data-t><span>Heure</span><input type="time" name="eTime" value="${eTime}"></label></div>
+    </div>
+    <div class="card" style="margin-top:12px">
+      <label class="field"><span>Lien</span><input name="url" type="url" value="${esc(v.url)}" placeholder="Billetterie, page de l'événement…" autocapitalize="off"></label>
+      <label class="field"><span>Notes</span><textarea name="notes" rows="3">${esc(v.notes)}</textarea></label>
+    </div>
+    <div class="err-msg" data-err hidden></div>
+    ${existing ? `<div class="btns"><button class="btn danger" data-del>Supprimer l'événement</button></div>` : ''}`, (sh) => {
+    const f = (n) => sh.querySelector(`[name="${n}"]`);
+    const syncAllDay = () => sh.querySelectorAll('[data-t]').forEach((el) => (el.style.visibility = f('allDay').checked ? 'hidden' : 'visible'));
+    syncAllDay();
+    f('allDay').onchange = syncAllDay;
+    let lastS = f('sDate').value;
+    f('sDate').onchange = () => { // décale la fin avec le début
+      const delta = keyToDate(f('sDate').value) - keyToDate(lastS);
+      if (f('eDate').value && !isNaN(delta)) f('eDate').value = localDateKey(new Date(keyToDate(f('eDate').value).getTime() + delta));
+      lastS = f('sDate').value;
+    };
+    f('sTime').onchange = () => {
+      const [h, m] = f('sTime').value.split(':').map(Number);
+      if (f('sDate').value === f('eDate').value) f('eTime').value = `${pad(Math.min(23, h + 1))}:${pad(m)}`;
+    };
+    if (!existing) setTimeout(() => f('title').focus(), 300);
+    sh.querySelector('[data-close]').onclick = closeSheet;
+    sh.querySelector('[data-save]').onclick = () => {
+      const err = sh.querySelector('[data-err]');
+      const title = f('title').value.trim();
+      if (!title) { err.textContent = 'Donne un titre à l’événement.'; err.hidden = false; return; }
+      if (!f('sDate').value) { err.textContent = 'Choisis une date.'; err.hidden = false; return; }
+      const ad = f('allDay').checked;
+      let start, end;
+      if (ad) {
+        start = f('sDate').value;
+        const lastDay = f('eDate').value && f('eDate').value >= start ? f('eDate').value : start;
+        end = localDateKey(new Date(keyToDate(lastDay).getTime() + 864e5 + 3 * 36e5)); // +1 j (exclusif), +3 h pour franchir un éventuel changement d'heure
+      } else {
+        const s = new Date(`${f('sDate').value}T${f('sTime').value || '00:00'}`);
+        let e = new Date(`${f('eDate').value || f('sDate').value}T${f('eTime').value || f('sTime').value || '00:00'}`);
+        if (!(e > s)) e = new Date(s.getTime() + 36e5);
+        start = s.toISOString(); end = e.toISOString();
+      }
+      const rec = {
+        id: existing ? existing.id : uid(), title, start, end, allDay: ad, origin: existing?.origin || 'manual',
+        location: f('location').value.trim() || undefined, url: f('url').value.trim() || undefined, notes: f('notes').value.trim() || undefined,
+        createdAt: existing?.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString(),
+      };
+      closeSheet();
+      mutate((c) => {
+        c.manual = (c.manual || []).filter((m) => m.id !== rec.id);
+        c.manual.push(rec);
+      }, existing ? 'Événement modifié' : 'Ajouté au radar ✓');
+      if (S.tab !== 'agenda') { S.tab = 'agenda'; LS.set('tab', 'agenda'); render(); }
+    };
+    const del = sh.querySelector('[data-del]');
+    if (del) del.onclick = () => {
+      if (!confirm('Supprimer cet événement ?')) return;
+      closeSheet();
+      mutate((c) => { c.manual = (c.manual || []).filter((m) => m.id !== existing.id); }, 'Événement supprimé');
+    };
+  });
+}
+
+function openDetail(ev) {
+  const src = ev.sourceId && S.config.sources.find((s) => s.id === ev.sourceId);
+  const rows = [
+    ev.location && `<div class="kv"><span>Lieu</span><div><a href="https://maps.apple.com/?q=${encodeURIComponent(ev.location)}" target="_blank" rel="noopener">${esc(ev.location)}</a></div></div>`,
+    ev.url && /^https?:\/\//i.test(ev.url) && `<div class="kv"><span>Lien</span><div><a href="${esc(ev.url)}" target="_blank" rel="noopener">${esc(ev.url.replace(/^https?:\/\//, ''))}</a></div></div>`,
+    ev.notes && `<div class="kv"><span>Notes</span><div>${esc(ev.notes)}</div></div>`,
+    `<div class="kv"><span>Source</span><div><span class="dot" style="display:inline-block;margin-right:6px;background:${esc(ev.color || 'var(--accent)')}"></span>${src ? esc(src.name) : 'Ajout manuel'}</div></div>`,
+  ].filter(Boolean).join('');
+  openSheet(`<div class="sheet-head"><span></span><button data-close>Fermer</button></div>
+    <div class="detail"><h3>${esc(ev.title)}</h3><div class="when">${esc(whenText(ev))}</div></div>
+    <div class="card">${rows}</div>
+    <div class="btns">${ev.origin === 'feed'
+      ? `<button class="btn ghost" data-hide>Masquer de Radar</button>`
+      : `<button class="btn ghost" data-edit>${ICON.pen} Modifier</button>`}</div>`, (sh) => {
+    sh.querySelector('[data-close]').onclick = closeSheet;
+    const ed = sh.querySelector('[data-edit]');
+    if (ed) ed.onclick = () => openEventForm(S.config.manual.find((m) => m.id === ev.id));
+    const hd = sh.querySelector('[data-hide]');
+    if (hd) hd.onclick = () => { closeSheet(); mutate((c) => { c.hidden = [...new Set([...(c.hidden || []), ev.icsUid])]; }, 'Événement masqué'); };
+  });
+}
+
+function openSourceForm(existing) {
+  const used = new Set((S.config.sources || []).map((s) => s.color));
+  let color = existing?.color || COLORS.find((c) => !used.has(c) && c !== COLORS[0]) || COLORS[1];
+  openSheet(`<div class="sheet-head"><button data-close>Annuler</button><h3>${existing ? 'Calendrier' : 'Lier un calendrier'}</h3><button data-save><b>${existing ? 'OK' : 'Ajouter'}</b></button></div>
+    <div class="card">
+      <label class="field"><span>Lien du calendrier (.ics ou webcal://)</span><input name="url" type="url" value="${esc(existing?.url)}" placeholder="https://…/calendar.ics" autocapitalize="off" spellcheck="false"></label>
+      <label class="field"><span>Nom</span><input name="name" value="${esc(existing?.name)}" placeholder="Ex. : Ligue 1, Concerts…"></label>
+      <div class="field"><span>Couleur</span><div class="swatches">${COLORS.map((c) => `<button type="button" data-color="${c}" class="${c === color ? 'on' : ''}" style="background:${c};color:${c}" aria-label="Couleur"></button>`).join('')}</div></div>
+      ${existing ? `<div class="toggle"><span>Afficher dans Radar</span><label class="switch"><input type="checkbox" name="enabled" ${existing.enabled !== false ? 'checked' : ''}><i></i></label></div>` : ''}
+    </div>
+    <div class="err-msg" data-err hidden></div>
+    ${existing ? '' : `<p class="note">Sur Sync2Cal, ouvre le calendrier voulu puis copie son lien d'abonnement (« Copy link » / iCal). Il est relu automatiquement toutes les ${SYNC_EVERY} environ.</p>`}
+    ${existing ? `<div class="btns"><button class="btn danger" data-del>Retirer ce calendrier</button></div>` : ''}`, (sh) => {
+    const f = (n) => sh.querySelector(`[name="${n}"]`);
+    sh.querySelectorAll('[data-color]').forEach((b) => (b.onclick = () => {
+      color = b.dataset.color; sh.querySelectorAll('[data-color]').forEach((x) => x.classList.toggle('on', x === b));
+    }));
+    if (!existing) setTimeout(() => f('url').focus(), 300);
+    sh.querySelector('[data-close]').onclick = closeSheet;
+    sh.querySelector('[data-save]').onclick = async () => {
+      const err = sh.querySelector('[data-err]');
+      const raw = f('url').value.trim();
+      if (!raw || !/\./.test(raw)) { err.textContent = 'Colle le lien du calendrier.'; err.hidden = false; return; }
+      const url = normalizeUrl(raw);
+      let name = f('name').value.trim();
+      if (existing) {
+        const enabled = f('enabled').checked;
+        closeSheet();
+        mutate((c) => { const s = c.sources.find((x) => x.id === existing.id); if (s) Object.assign(s, { url, name: name || s.name, color, enabled }); }, 'Calendrier mis à jour');
+        return;
+      }
+      const btn = sh.querySelector('[data-save]'); btn.innerHTML = '…'; btn.disabled = true;
+      const parsed = await tryDirectFetch({ url });
+      if (parsed && parsed.error) { err.textContent = parsed.error; err.hidden = false; btn.innerHTML = '<b>Ajouter</b>'; btn.disabled = false; return; }
+      if (!name) name = parsed?.calName || (() => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return 'Calendrier'; } })();
+      const src = { id: uid(), name, url, color, enabled: true, addedAt: new Date().toISOString() };
+      closeSheet();
+      await mutate((c) => { c.sources = [...(c.sources || []), src]; }, parsed ? null : `Calendrier ajouté : import à la prochaine synchro (≤ ${SYNC_EVERY})`);
+      if (parsed) {
+        try { await publishRemoteFor(src, parsed); toast(`${parsed.events.length} événements importés ✓`); }
+        catch (e2) { toast('Ajouté, import à la prochaine synchro.'); }
+      }
+    };
+    const del = sh.querySelector('[data-del]');
+    if (del) del.onclick = () => {
+      if (!confirm(`Retirer « ${existing.name} » de Radar ?`)) return;
+      closeSheet();
+      mutate((c) => { c.sources = c.sources.filter((s) => s.id !== existing.id); }, 'Calendrier retiré');
+    };
+  });
+}
+
+/* ================= Démarrage ================= */
+render();
+load({ quiet: true });
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && (!S.lastLoad || Date.now() - Date.parse(S.lastLoad) > 6e4)) load({ quiet: true });
+});
+setInterval(() => { if (document.visibilityState === 'visible' && S.tab === 'agenda' && $('#sheet').hidden && document.activeElement?.id !== 'q') render(); }, 60000);
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
