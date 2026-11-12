@@ -281,6 +281,13 @@ function render() {
   $('#tabbar').hidden = !connected;
   $('#fab').hidden = !connected || S.tab !== 'agenda';
   document.querySelectorAll('#tabbar button').forEach((b) => b.classList.toggle('on', b.dataset.tab === S.tab));
+  // Comme dans Fantôme : sur l'Agenda (l'accueil), le menu en haut puis le grand titre ; ailleurs, le titre
+  // plus petit au-dessus du menu. Pendant un changement d'onglet, la transition fait glisser l'un et l'autre.
+  const titre = $('.titre-site'), menu = $('#tabbar');
+  const accueil = !connected || S.tab === 'agenda';
+  titre.classList.toggle('accueil', accueil);
+  if (accueil && connected && menu.nextElementSibling !== titre) document.body.insertBefore(menu, titre);
+  if (!accueil && titre.nextElementSibling !== menu) document.body.insertBefore(titre, menu);
   if (!connected) { app.innerHTML = viewSetup(); bindSetup(); return; }
   if (S.tab === 'sources') app.innerHTML = viewSources();
   else if (S.tab === 'settings') app.innerHTML = viewSettings();

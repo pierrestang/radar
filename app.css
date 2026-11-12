@@ -67,10 +67,14 @@ a { color: inherit; text-underline-offset: 3px; }
 #app > :first-child { margin-top: 0 !important; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
-/* Le nom du site en crème sur le fond, comme le titre de Fantôme */
-.titre-site { margin: calc(var(--safe-top) + var(--e-4)) 0 0; text-align: center; font-family: var(--serif); font-weight: 400;
-  font-size: clamp(56px, 16vw, 88px); line-height: 1; letter-spacing: -.05em; color: var(--creme); user-select: none; }
-@media (min-width: 600px) { #app { padding: var(--e-4); } }
+/* Le nom du site en crème sur le fond, comme le titre de Fantôme : grand et descendu vers le centre sur l'Agenda
+   (l'accueil, sous le menu), plus petit et au-dessus du menu sur les autres onglets. */
+:root { --t-titre: clamp(64px, 18vw, 116px); }
+.titre-site { display: flex; align-items: center; justify-content: center; height: var(--t-titre); margin: calc(var(--safe-top) + var(--e-4)) 0 0;
+  font-family: var(--serif); font-weight: 400; font-size: calc(var(--t-titre) * .6); line-height: 1; letter-spacing: -.05em;
+  color: var(--creme); user-select: none; }
+.titre-site.accueil { margin: clamp(40px, 12vh, 140px) 0 var(--e-4); font-size: var(--t-titre); }
+body > canvas + .tabbar { margin-top: calc(var(--safe-top) + var(--e-3)); }
 
 /* --- En-tête de page ------------------------------------------------------------------------------ */
 
@@ -279,7 +283,7 @@ a { color: inherit; text-underline-offset: 3px; }
 
 .hero { padding: var(--e-4) var(--e-2) var(--e-2); text-align: center; }
 .hero svg.logo { width: 88px; height: 88px; }
-.hero h1 { margin: var(--e-3) 0 var(--e-2); font-family: var(--serif); font-weight: 400; font-size: 48px; line-height: 1; letter-spacing: -.05em; }
+.hero h1 { display: none; margin: var(--e-3) 0 var(--e-2); font-family: var(--serif); font-weight: 400; font-size: 48px; line-height: 1; letter-spacing: -.05em; }
 .hero p { max-width: 34ch; margin: 0 auto; color: var(--discret); }
 .steps { margin: 0; padding: 0; list-style: none; counter-reset: s; }
 .steps li { position: relative; padding: var(--e-3) var(--e-3) var(--e-3) 52px; counter-increment: s; }
@@ -302,6 +306,12 @@ a { color: inherit; text-underline-offset: 3px; }
 .tabbar { view-transition-name: menu; }
 ::view-transition-group(*) { animation-duration: .6s; animation-timing-function: var(--glisse); }
 ::view-transition-old(fond), ::view-transition-new(fond), ::view-transition-old(root), ::view-transition-new(root) { animation: none; }
+/* titre et menu : un seul objet qui se déplace et change de taille, sans fondu entre deux images */
+::view-transition-old(titre-radar) { animation: none; opacity: 0; }
+::view-transition-new(titre-radar) { animation: none; height: 100%; object-fit: contain; }
+::view-transition-old(menu) { animation: .25s var(--glisse) both disparait; }
+::view-transition-new(menu) { animation: .35s var(--glisse) both apparait; }
+@keyframes apparait { from { opacity: 0; } }
 ::view-transition-group(feuille) { animation: none; }
 ::view-transition-old(feuille) { animation: .18s ease-out both disparait; }
 ::view-transition-new(feuille) { animation: .55s var(--glisse) .08s both monte; }
