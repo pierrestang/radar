@@ -326,7 +326,7 @@ export function googlePayload(config, remote, { now = Date.now() } = {}) {
     if (ev.location) x.location = ev.location;
     const n = fullNotes(ev); if (n) x.notes = n;
     const c = googleColorId(ev.color);
-    if (c) x.color = c;
+    if (c) { x.color = c; x.hex = ev.color.toUpperCase(); x.label = ev.categoryName || ''; }
     return x;
   });
   return { built: new Date(now).toISOString(), events };
