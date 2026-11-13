@@ -1,5 +1,5 @@
 import ICAL from './vendor/ical.min.js';
-import { parseICS, buildICS, mergedEvents, normalizeUrl, emptyConfig, emptyRemote, startMs, categoriesOf, googlePayload } from './shared/ics.js';
+import { parseICS, buildICS, mergedEvents, normalizeUrl, emptyConfig, emptyRemote, startMs, categoriesOf, googlePayload, GOOGLE_PALETTE } from './shared/ics.js';
 import { findGist, readGist, writeGist, createGist, dispatchSync } from './shared/gist.js';
 import { MUSIC_SOURCE_ID, searchArtists, musicReleases } from './shared/itunes.js';
 
@@ -10,7 +10,7 @@ const LS = {
   del(k) { try { localStorage.removeItem('radar.' + k); } catch {} },
 };
 
-const COLORS = ['#0B8A65', '#2F6FEB', '#E0573B', '#C2410C', '#9333EA', '#DB2777', '#0891B2', '#65A30D', '#CA8A04', '#64748B'];
+const COLORS = GOOGLE_PALETTE.map((c) => c.hex);
 const SYNC_EVERY = '30 min';
 
 const S = {
@@ -886,7 +886,7 @@ function openCatForm(existing) {
   (existing ? openPage : openSheet)(`<div class="sheet-head"><button data-close>Annuler</button><h3>${existing ? 'Rubrique' : 'Nouvelle rubrique'}</h3><button data-save><b>${existing ? 'OK' : 'Ajouter'}</b></button></div>
     <div class="card">
       <label class="field"><span>Nom</span><input name="name" value="${esc(existing?.name)}" placeholder="Ex. : Concert, Expo…" maxlength="30"></label>
-      <div class="field"><span>Couleur</span><div class="swatches">${COLORS.map((c) => `<button type="button" data-color="${c}" class="${c === color ? 'on' : ''}" style="background:${c};color:${c}" aria-label="Couleur"></button>`).join('')}</div></div>
+      <div class="field"><span>Couleur</span><div class="swatches">${GOOGLE_PALETTE.map((c) => `<button type="button" data-color="${c.hex}" class="${c.hex === color ? 'on' : ''}" style="background:${c.hex};color:${c.hex}" aria-label="${c.name}" title="${c.name}"></button>`).join('')}</div></div>
       <div class="field"><span>Illustration</span><div class="art-picker">${Object.entries(ART).map(([k, a]) => `<button type="button" data-icon="${k}" class="${k === icon ? 'on' : ''}" aria-label="${esc(a.label)}" title="${esc(a.label)}">${artSvg(k, 'mini')}</button>`).join('')}</div></div>
     </div>
     <div class="err-msg" data-err hidden></div>
@@ -976,7 +976,7 @@ function openArtistSearch() {
               if (!c.musicCategory) {
                 const existing = c.categories.find((x) => /musi|rap/i.test(x.name));
                 if (existing) c.musicCategory = existing.id;
-                else { c.categories.push({ id: 'musique', name: 'Musique', color: '#0891B2', icon: 'musique' }); c.musicCategory = 'musique'; }
+                else { c.categories.push({ id: 'musique', name: 'Musique', color: '#7986CB', icon: 'musique' }); c.musicCategory = 'musique'; }
               }
             }, null);
             try { const n = await refreshMusic(S.config.artists); toast(`${artist.name} suivi ✓ · ${n} sortie${n > 1 ? 's' : ''} au total`); }

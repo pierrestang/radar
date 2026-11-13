@@ -254,14 +254,20 @@ export function mergedEvents(config, remote) {
 }
 
 export const DEFAULT_CATEGORIES = [
-  { id: 'sport', name: 'Sport', color: '#2F6FEB' },
-  { id: 'jeux', name: 'Jeux vidéo', color: '#9333EA' },
-  { id: 'film', name: 'Film', color: '#E0573B' },
-  { id: 'serie', name: 'Série', color: '#DB2777' },
-  { id: 'video', name: 'Vidéo', color: '#CA8A04' },
+  { id: 'sport', name: 'Sport', color: '#039BE5' },
+  { id: 'jeux', name: 'Jeux vidéo', color: '#8E24AA' },
+  { id: 'film', name: 'Film', color: '#F4511E' },
+  { id: 'serie', name: 'Série', color: '#E67C73' },
+  { id: 'video', name: 'Vidéo', color: '#F6BF26' },
 ];
+/** Rubriques, chaque couleur ramenée à la couleur Google Agenda la plus proche. */
 export function categoriesOf(config) {
-  return Array.isArray(config.categories) ? config.categories : DEFAULT_CATEGORIES;
+  const list = Array.isArray(config.categories) ? config.categories : DEFAULT_CATEGORIES;
+  return list.map((c) => {
+    const id = googleColorId(c.color);
+    const color = id ? GOOGLE_COLORS[id] : c.color;
+    return color === c.color ? c : { ...c, color };
+  });
 }
 
 /** Notes complètes d'un événement : où le voir (chaîne ou plateforme), puis les notes. */
@@ -280,10 +286,15 @@ export function emptyRemote() {
 /* ---------- Envoi vers Google Agenda (Apps Script) ---------- */
 
 // Couleurs d'événement Google Agenda (identifiants 1 à 11).
-const GOOGLE_COLORS = {
+export const GOOGLE_COLORS = {
   1: '#7986CB', 2: '#33B679', 3: '#8E24AA', 4: '#E67C73', 5: '#F6BF26', 6: '#F4511E',
   7: '#039BE5', 8: '#616161', 9: '#3F51B5', 10: '#0B8043', 11: '#D50000',
 };
+/** Palette des rubriques : les 11 couleurs de Google Agenda, dans l'ordre et avec les noms de Google. */
+export const GOOGLE_PALETTE = [
+  [11, 'Tomate'], [4, 'Flamant'], [6, 'Mandarine'], [5, 'Banane'], [2, 'Sauge'], [10, 'Basilic'],
+  [7, 'Paon'], [9, 'Myrtille'], [1, 'Lavande'], [3, 'Raisin'], [8, 'Graphite'],
+].map(([id, name]) => ({ id: String(id), name, hex: GOOGLE_COLORS[id] }));
 function rgb(hex) { const h = hex.replace('#', ''); return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)); }
 /** Couleur Google la plus proche d'une couleur de rubrique. */
 export function googleColorId(hex) {
