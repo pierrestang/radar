@@ -260,12 +260,11 @@ export const DEFAULT_CATEGORIES = [
   { id: 'serie', name: 'Série', color: '#E67C73' },
   { id: 'video', name: 'Vidéo', color: '#F6BF26' },
 ];
-/** Rubriques, chaque couleur ramenée à la couleur Google Agenda la plus proche. */
+/** Rubriques, chaque couleur ramenée à la couleur de la palette Google Agenda la plus proche. */
 export function categoriesOf(config) {
   const list = Array.isArray(config.categories) ? config.categories : DEFAULT_CATEGORIES;
   return list.map((c) => {
-    const id = googleColorId(c.color);
-    const color = id ? GOOGLE_COLORS[id] : c.color;
+    const color = paletteColor(c.color) || c.color;
     return color === c.color ? c : { ...c, color };
   });
 }
@@ -290,18 +289,22 @@ export const GOOGLE_COLORS = {
   1: '#7986CB', 2: '#33B679', 3: '#8E24AA', 4: '#E67C73', 5: '#F6BF26', 6: '#F4511E',
   7: '#039BE5', 8: '#616161', 9: '#3F51B5', 10: '#0B8043', 11: '#D50000',
 };
-/** Palette des rubriques : les 11 couleurs de Google Agenda, dans l'ordre et avec les noms de Google. */
+/** Palette des rubriques : les 24 couleurs proposées par Google Agenda, dans son ordre et avec ses noms.
+ *  Un événement Google n'accepte que les 11 couleurs ci-dessus : les 13 autres y sont rendues par la plus proche. */
 export const GOOGLE_PALETTE = [
-  [11, 'Tomate'], [4, 'Flamant'], [6, 'Mandarine'], [5, 'Banane'], [2, 'Sauge'], [10, 'Basilic'],
-  [7, 'Paon'], [9, 'Myrtille'], [1, 'Lavande'], [3, 'Raisin'], [8, 'Graphite'],
-].map(([id, name]) => ({ id: String(id), name, hex: GOOGLE_COLORS[id] }));
+  ['#AD1457', 'Radicchio'], ['#D81B60', 'Fleur de cerisier'], ['#E67C73', 'Flamant'], ['#D50000', 'Tomate'],
+  ['#F4511E', 'Mandarine'], ['#EF6C00', 'Citrouille'], ['#F09300', 'Mangue'], ['#F6BF26', 'Banane'],
+  ['#E4C441', 'Citron'], ['#C0CA33', 'Avocat'], ['#7CB342', 'Pistache'], ['#0B8043', 'Basilic'],
+  ['#33B679', 'Sauge'], ['#009688', 'Eucalyptus'], ['#039BE5', 'Paon'], ['#4285F4', 'Cobalt'],
+  ['#7986CB', 'Lavande'], ['#3F51B5', 'Myrtille'], ['#B39DDB', 'Glycine'], ['#9E69AF', 'Améthyste'],
+  ['#8E24AA', 'Raisin'], ['#795548', 'Cacao'], ['#616161', 'Graphite'], ['#A79B8E', 'Bouleau'],
+].map(([hex, name]) => ({ hex, name }));
 function rgb(hex) { const h = hex.replace('#', ''); return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)); }
-/** Couleur Google la plus proche d'une couleur de rubrique. */
-export function googleColorId(hex) {
+function nearest(hex, entries) {
   if (!/^#[0-9a-f]{6}$/i.test(hex || '')) return null;
   const [r, g, b] = rgb(hex);
   let best = null, bestD = Infinity;
-  for (const [id, h] of Object.entries(GOOGLE_COLORS)) {
+  for (const [id, h] of entries) {
     const [r2, g2, b2] = rgb(h);
     const rm = (r + r2) / 2; // distance « redmean », proche de la perception
     const d = (2 + rm / 256) * (r - r2) ** 2 + 4 * (g - g2) ** 2 + (2 + (255 - rm) / 256) * (b - b2) ** 2;
@@ -309,6 +312,10 @@ export function googleColorId(hex) {
   }
   return best;
 }
+/** Couleur d'événement Google (1 à 11) la plus proche d'une couleur de rubrique. */
+export function googleColorId(hex) { return nearest(hex, Object.entries(GOOGLE_COLORS)); }
+/** Couleur de la palette Google Agenda (24) la plus proche. */
+export function paletteColor(hex) { return nearest(hex, GOOGLE_PALETTE.map((c) => [c.hex, c.hex])); }
 
 export function googlePayload(config, remote, { now = Date.now() } = {}) {
   const events = mergedEvents(config, remote).map((ev) => {
