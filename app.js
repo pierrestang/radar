@@ -2,6 +2,8 @@ import ICAL from './vendor/ical.min.js';
 import { parseICS, buildICS, mergedEvents, normalizeUrl, emptyConfig, emptyRemote, startMs, categoriesOf, googlePayload, GOOGLE_PALETTE } from './shared/ics.js';
 import { findGist, readGist, writeGist, createGist, dispatchSync } from './shared/gist.js';
 import { MUSIC_SOURCE_ID, searchArtists, musicReleases } from './shared/itunes.js';
+import { SUGGESTIONS, previewEvents } from './shared/suggestions.js';
+import { frenchify } from './shared/translate.js';
 
 /* ================= État ================= */
 const LS = {
@@ -310,30 +312,104 @@ async function addSource({ name, url, category, translate = true }) {
   return { ok: true };
 }
 
-/* Calendriers gratuits vérifiés (recherche du 12/11/2026), à ajouter d'un appui depuis Sources. */
-const SUGGESTIONS = [
-  { group: 'Football', cat: 'sport', items: [
-    ['OM', 'https://matchcalendar.football/team/marseille/marseille.ics'],
-    ['Ligue des champions', 'https://matchcalendar.football/competition/champions-league/champions-league.ics'],
-    ['Équipe de France', 'https://matchcalendar.football/team/france/france.ics'],
-    ['Real Madrid', 'https://matchcalendar.football/team/real-madrid/real-madrid.ics'],
-  ] },
-  { group: 'Séries', cat: 'serie', items: [
-    ['Netflix', 'https://www.smartcalendars.ai/cal/4fc097ff8c48803f38c6272953b5c349e4669652cc4686e154ecc61a7b7d968f.ics'],
-    ['Prime Video', 'https://www.smartcalendars.ai/cal/a1d170b8827c245b4bf4391c83e3551a797f91537c3d9a0f291efbd6bdde4d29.ics'],
-    ['Disney+', 'https://www.smartcalendars.ai/cal/53757181785a61d01d52b99de46f6e975311dd558adf00e3828a01756c08a1b5.ics'],
-    ['Apple TV+', 'https://www.smartcalendars.ai/cal/e93ddfee3629f75f5eec91218b5b42027335911a7d42b820b8d5c82ad1081bdf.ics'],
-  ] },
-  { group: 'Films', cat: 'film', items: [
-    ['Films les plus attendus', 'https://www.smartcalendars.ai/cal/1d98bae7fac4944084f941ee1e715ec74b994c71e7c596ec01b38b61d37a9067.ics'],
-  ] },
-];
+/* Suggestions (shared/suggestions.js) : prochains événements lus par la synchro (remote.suggestions),
+   sinon lus directement par le navigateur quand le site l'autorise. */
+const suggLive = {}; // url → { events } | 'loading' | 'failed'
+function suggEvents(it) {
+  const cached = S.remote?.suggestions?.feeds?.[it.url];
+  const live = suggLive[it.url];
+  const list = (live && live.events) || cached?.events || null;
+  if (!list && !live) {
+    suggLive[it.url] = 'loading';
+    tryDirectFetch({ url: it.url }).then((r) => {
+      suggLive[it.url] = r && r.events ? { events: previewEvents(r.events) } : 'failed';
+      if (r && r.events && S.tab === 'sources') render();
+    });
+  }
+  if (!list) return null;
+  const now = Date.now();
+  return list.map((e) => ({ ...frenchify(e), feed: it, sid: `${e.uid}@sugg` })).filter((e) => evEndMs(e) > now);
+}
 const sameFeed = (a, b) => normalizeUrl(a).replace(/[?#].*$/, '').replace(/\/+$/, '') === normalizeUrl(b).replace(/[?#].*$/, '').replace(/\/+$/, '');
 /** Rubrique existante la plus proche (ex. « serie » absente → la rubrique Film). */
-function suggestCat(id) {
+function suggCat(id) {
   if (catById(id)) return id;
   const byName = cats().find((c) => c.name.toLowerCase().includes(id === 'serie' ? 'séri' : id === 'film' ? 'film' : id));
   return byName ? byName.id : null;
+}
+
+const suggWhen = (e) => {
+  const d = dayLabel(evDayKey(e));
+  return e.allDay ? d : `${d} · ${fmtTime(e.start)}`;
+};
+const groupOf = (url) => SUGGESTIONS.find((g) => g.items.some((it) => it.url === url));
+
+/** Ajoute un seul événement suggéré à l'agenda (comme une saisie, avec son lien). */
+function addSuggested(e, cat) {
+  const rec = {
+    id: uid(), title: e.title, start: e.start, end: e.end, allDay: !!e.allDay, origin: 'suggestion', category: suggCat(cat) || undefined,
+    location: e.location || undefined, url: e.url || e.feed.site, notes: e.notes || undefined,
+    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+  };
+  closeSheet();
+  mutate((c) => { c.manual = [...(c.manual || []), rec]; }, 'Ajouté au radar ✓');
+}
+
+function followFeed(it) {
+  closeSheet();
+  addSource({ name: it.name, url: it.url, category: suggCat(groupOf(it.url)?.cat) }).then((r) => { if (r?.error) toast(r.error, 4000); });
+}
+
+function openSuggestion(e, cat) {
+  const link = e.url && /^https?:\/\//i.test(e.url) ? e.url : e.feed.site;
+  const rows = [
+    e.location && `<div class="kv"><span>Lieu</span><div>${esc(e.location)}</div></div>`,
+    e.notes && `<div class="kv"><span>Notes</span><div>${esc(e.notes)}</div></div>`,
+    `<div class="kv"><span>Proposé par</span><div>${esc(e.feed.name)} · ${esc(new URL(e.feed.site).hostname.replace(/^www\./, ''))}</div></div>`,
+  ].filter(Boolean).join('');
+  openSheet(`<div class="sheet-head"><span></span><button data-close>Fermer</button></div>
+    <div class="detail"><h3>${esc(e.title)}</h3><div class="when">${esc(whenText(e))}</div></div>
+    <div class="card">${rows}</div>
+    <div class="btns">
+      <button class="btn" data-add>Ajouter à mon agenda</button>
+      <a class="btn ghost" href="${esc(link)}" target="_blank" rel="noopener">Voir sur le site ↗</a>
+      <button class="btn ghost" data-feed>Voir tout le calendrier ${esc(e.feed.name)}</button>
+    </div>`, (sh) => {
+    sh.querySelector('[data-close]').onclick = closeSheet;
+    sh.querySelector('[data-add]').onclick = () => addSuggested(e, cat);
+    sh.querySelector('[data-feed]').onclick = () => openSuggFeed(e.feed.url);
+  });
+}
+
+/** Aperçu d'un calendrier suggéré : ses prochains événements, le site, et « tout suivre ». */
+function openSuggFeed(url) {
+  const g = groupOf(url); const it = g?.items.find((x) => x.url === url);
+  if (!it) return;
+  const evs = (suggEvents(it) || []).sort((x, y) => startMs(x) - startMs(y));
+  const map = {}; evs.forEach((e) => { map[e.sid] = e; });
+  const c = catById(suggCat(g.cat));
+  openSheet(`<div class="sheet-head"><span></span><button data-close>Fermer</button></div>
+    <div class="detail"><h3>${esc(it.name)}</h3><div class="when">${esc(new URL(it.site).hostname.replace(/^www\./, ''))}</div></div>
+    <div class="btns">
+      <a class="btn ghost" href="${esc(it.site)}" target="_blank" rel="noopener">Voir le site ↗</a>
+      <button class="btn" data-follow>Suivre tout le calendrier</button>
+    </div>
+    <div class="section-title">Prochains événements</div>
+    <div class="card">${evs.map((e) => `
+      <div class="row"><span class="dot" style="background:${esc(c ? c.color : 'var(--faint)')};width:10px;height:10px"></span>
+        <div class="grow"><div class="name">${esc(e.title)}</div><div class="info">${esc(suggWhen(e))}</div></div>
+        <button class="iconbtn sm" data-one="${esc(e.sid)}" aria-label="Ajouter ${esc(e.title)}" title="Ajouter à mon agenda"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button></div>`).join('')
+      || `<div class="row"><div class="grow"><div class="info">Aucun événement lu pour l'instant : ouvre le site pour voir ce qu'il propose.</div></div></div>`}</div>`, (sh) => {
+    sh.querySelector('[data-close]').onclick = closeSheet;
+    sh.querySelector('[data-follow]').onclick = () => followFeed(it);
+    sh.querySelectorAll('[data-one]').forEach((b) => (b.onclick = () => {
+      const e = map[b.dataset.one]; if (!e) return;
+      const rec = { id: uid(), title: e.title, start: e.start, end: e.end, allDay: !!e.allDay, origin: 'suggestion', category: suggCat(g.cat) || undefined,
+        location: e.location || undefined, url: e.url || it.site, notes: e.notes || undefined, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+      b.disabled = true; b.innerHTML = '✓';
+      mutate((cfg) => { cfg.manual = [...(cfg.manual || []), rec]; }, 'Ajouté au radar ✓');
+    }));
+  });
 }
 
 /* ================= Rendu ================= */
@@ -510,17 +586,27 @@ function viewSources() {
     }).join('')}</div>`;
   }
 
-  // Suggestions : calendriers vérifiés, ajout en un appui
+  // Suggestions : de vrais événements à venir, à ajouter un par un ; le calendrier complet en second
   const have = (u) => srcs.some((x) => sameFeed(x.url, u));
-  const groups = SUGGESTIONS.map((g) => ({ ...g, items: g.items.filter(([, u]) => !have(u)) })).filter((g) => g.items.length);
+  const inAgenda = new Set(allEvents().map((e) => `${e.title.toLowerCase().trim()}|${e.start.slice(0, 16)}`));
+  const groups = SUGGESTIONS.map((g) => ({ ...g, items: g.items.filter((it) => !have(it.url)) })).filter((g) => g.items.length);
   if (groups.length) {
     html += `<div class="section-title">Suggestions</div>`;
+    S.suggShown = {};
     for (const g of groups) {
-      const c = catById(suggestCat(g.cat));
-      html += `<div class="sugg-group">${esc(g.group)}</div><div class="card">${g.items.map(([name, u]) => `
+      const c = catById(suggCat(g.cat));
+      const seen = new Set();
+      const evs = g.items.flatMap((it) => suggEvents(it) || [])
+        .filter((e) => { const k = `${e.title.toLowerCase().trim()}|${e.start.slice(0, 16)}`; if (seen.has(k) || inAgenda.has(k)) return false; seen.add(k); return true; })
+        .sort((x, y) => startMs(x) - startMs(y)).slice(0, 5);
+      evs.forEach((e) => { S.suggShown[e.sid] = { ev: e, cat: g.cat }; });
+      const loading = g.items.some((it) => suggLive[it.url] === 'loading' && !S.remote?.suggestions?.feeds?.[it.url]);
+      html += `<div class="sugg-group">${esc(g.group)}</div><div class="card">${evs.map((e) => `
         <div class="row"><span class="dot" style="background:${esc(c ? c.color : 'var(--faint)')};width:10px;height:10px"></span>
-          <div class="grow"><div class="name">${esc(name)}</div><div class="info">${esc(new URL(u).hostname.replace(/^www\./, ''))}</div></div>
-          <button class="iconbtn sm" data-suggest="${esc(u)}" data-sname="${esc(name)}" data-scat="${esc(g.cat)}" aria-label="Ajouter ${esc(name)}" title="Ajouter"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button></div>`).join('')}</div>`;
+          <button class="grow plain" data-sugg-ev="${esc(e.sid)}"><div class="name">${esc(e.title)}</div><div class="info">${esc(suggWhen(e))} · ${esc(e.feed.name)}</div></button>
+          <button class="iconbtn sm" data-sugg-add="${esc(e.sid)}" aria-label="Ajouter ${esc(e.title)}" title="Ajouter à mon agenda"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button></div>`).join('')
+        || `<div class="row"><div class="grow"><div class="info">${loading ? 'Recherche des prochains événements…' : 'Prochains événements disponibles après la prochaine synchro.'}</div></div></div>`}
+        <div class="sugg-feeds"><span class="sugg-label">Tout le calendrier :</span>${g.items.map((it) => `<button class="chip" data-sugg-feed="${esc(it.url)}">${esc(it.name)}</button>`).join('')}</div></div>`;
     }
   }
   return html;
@@ -603,15 +689,13 @@ function bindView() {
 }
 
 document.addEventListener('click', (e) => {
-  const t = e.target.closest('[data-act],[data-ev],[data-src],[data-filter],[data-tab],[data-catedit],[data-suggest],[data-artist]');
+  const t = e.target.closest('[data-act],[data-ev],[data-src],[data-filter],[data-tab],[data-catedit],[data-artist],[data-sugg-ev],[data-sugg-add],[data-sugg-feed]');
   if (!t) return;
   if (t.dataset.tab) { goTab(t.dataset.tab); return; }
   if (t.dataset.catedit) { openCatForm(catById(t.dataset.catedit)); return; }
-  if (t.dataset.suggest) {
-    t.disabled = true; t.classList.add('spin');
-    addSource({ name: t.dataset.sname, url: t.dataset.suggest, category: suggestCat(t.dataset.scat) }).then((r) => { if (r?.error) toast(r.error, 4000); });
-    return;
-  }
+  if (t.dataset.suggAdd) { const x = S.suggShown?.[t.dataset.suggAdd]; if (x) addSuggested(x.ev, x.cat); return; }
+  if (t.dataset.suggEv) { const x = S.suggShown?.[t.dataset.suggEv]; if (x) openSuggestion(x.ev, x.cat); return; }
+  if (t.dataset.suggFeed) { openSuggFeed(t.dataset.suggFeed); return; }
   if (t.dataset.artist) { const a = (S.config.artists || []).find((x) => String(x.id) === t.dataset.artist); if (a) openArtist(a); return; }
   if (t.dataset.filter) { S.filter = t.dataset.filter; render(); return; }
   if (t.dataset.ev) { const ev = allEvents().find((x) => x.icsUid === t.dataset.ev); if (ev) openDetail(ev); return; }

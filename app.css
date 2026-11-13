@@ -359,3 +359,9 @@ body > canvas + .tabbar { margin-top: calc(var(--safe-top) + var(--e-3)); }
 .sheet:not(.page) .grab { display: none; }
 @keyframes descend { from { opacity: 0; transform: translateY(-16px); } }
 .row .cover { width: 44px; height: 44px; flex: none; border-radius: 6px; background: var(--neutre-doux); object-fit: cover; }
+/* Suggestions d'événements : ligne cliquable (fiche) + bouton « + », puis les calendriers complets en pastilles */
+.row .plain { padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.sugg-feeds { display: flex; flex-wrap: wrap; gap: var(--e-2); padding: var(--e-2) var(--e-3) var(--e-3); border-top: 1px solid var(--bordure); }
+a.btn { text-decoration: none; }
+.sugg-label { align-self: center; color: var(--discret); font-size: var(--t-1); }
+#sheet > .section-title { margin: var(--e-4) 0 var(--e-2); }

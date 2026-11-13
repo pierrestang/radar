@@ -7,6 +7,7 @@ import { parseICS, buildICS, normalizeUrl, emptyConfig, emptyRemote, googlePaylo
 import { findGist, readGist, writeGist } from '../shared/gist.js';
 import { TV_PAGES, TV_REFRESH_MS, parseFootao, annotateTv } from '../shared/tv.js';
 import { MUSIC_SOURCE_ID, musicReleases } from '../shared/itunes.js';
+import { SUGGESTIONS, SUGGESTIONS_REFRESH_MS, previewEvents } from '../shared/suggestions.js';
 
 const UA = { 'User-Agent': 'Radar-calendar-sync/1.0' };
 
@@ -82,6 +83,23 @@ if (next.tv) {
   let n = 0;
   for (const s of Object.values(next.sources)) n += annotateTv(s.events || [], next.tv.items);
   console.log(`📺 ${n} matchs avec leur chaîne`);
+}
+
+// Prochains événements des calendriers suggérés (onglet Sources), relus toutes les 6 h.
+next.suggestions = remote.suggestions || null;
+if (!next.suggestions || Date.now() - Date.parse(next.suggestions.fetchedAt || 0) > SUGGESTIONS_REFRESH_MS) {
+  const feeds = { ...(next.suggestions?.feeds || {}) };
+  let n = 0;
+  for (const g of SUGGESTIONS) for (const it of g.items) {
+    try {
+      const res = await fetch(it.url, { headers: { ...UA, Accept: 'text/calendar, */*' }, signal: AbortSignal.timeout(30000) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      feeds[it.url] = { fetchedAt: new Date().toISOString(), events: previewEvents(parseICS(await res.text(), ICAL).events) };
+      n++;
+    } catch (err) { console.log(`✗ suggestion : ${err.message || err}`); }
+  }
+  next.suggestions = { fetchedAt: new Date().toISOString(), feeds };
+  console.log(`💡 suggestions : ${n} calendriers relus`);
 }
 
 // Relire la config juste avant d'écrire, au cas où elle aurait changé pendant la synchro.
