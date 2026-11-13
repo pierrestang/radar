@@ -138,8 +138,9 @@ function applyLabels_(cal, events, from, to) {
     evs.push([ev, id]);
   });
   let n = 0, err = null;
-  for (let i = 0; i < reqs.length; i += 50) {
-    UrlFetchApp.fetchAll(reqs.slice(i, i + 50)).forEach(function (res, k) {
+  for (let i = 0; i < reqs.length; i += 10) {
+    if (i) Utilities.sleep(1000); // limite de débit de l'API Agenda
+    UrlFetchApp.fetchAll(reqs.slice(i, i + 10)).forEach(function (res, k) {
       if (res.getResponseCode() < 300) { evs[i + k][0].setTag('radarLabel', evs[i + k][1]); n++; }
       else if (!err) err = 'PATCH ' + res.getResponseCode() + ' ' + res.getContentText().slice(0, 200);
     });
