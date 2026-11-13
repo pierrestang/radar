@@ -348,7 +348,7 @@ const groupOf = (url) => SUGGESTIONS.find((g) => g.items.some((it) => it.url ===
 function addSuggested(e, cat) {
   const rec = {
     id: uid(), title: e.title, start: e.start, end: e.end, allDay: !!e.allDay, origin: 'suggestion', category: suggCat(cat) || undefined,
-    location: e.location || undefined, url: e.url || e.feed.site, notes: e.notes || undefined,
+    location: e.location || undefined, url: e.url || e.feed.site, notes: e.notes || undefined, platform: e.platform || undefined,
     createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
   };
   closeSheet();
@@ -365,7 +365,9 @@ function openSuggestion(e, cat) {
   const rows = [
     e.location && `<div class="kv"><span>Lieu</span><div>${esc(e.location)}</div></div>`,
     e.notes && `<div class="kv"><span>Notes</span><div>${esc(e.notes)}</div></div>`,
-    `<div class="kv"><span>Proposé par</span><div>${esc(e.feed.name)} · ${esc(new URL(e.feed.site).hostname.replace(/^www\./, ''))}</div></div>`,
+    e.platform && `<div class="kv"><span>Où le voir</span><div>${esc(e.platform)}</div></div>`,
+    e.feed.credit ? `<div class="kv"><span>Sélection</span><div>${esc(e.feed.label || 'Sélection')} (${esc(e.feed.name)})</div></div>`
+      : `<div class="kv"><span>Proposé par</span><div>${esc(e.feed.name)} · ${esc(new URL(e.feed.site).hostname.replace(/^www\./, ''))}</div></div>`,
   ].filter(Boolean).join('');
   openSheet(`<div class="sheet-head"><span></span><button data-close>Fermer</button></div>
     <div class="detail"><h3>${esc(e.title)}</h3><div class="when">${esc(whenText(e))}</div></div>
@@ -373,11 +375,11 @@ function openSuggestion(e, cat) {
     <div class="btns">
       <button class="btn" data-add>Ajouter à mon agenda</button>
       <a class="btn ghost" href="${esc(link)}" target="_blank" rel="noopener">Voir sur le site ↗</a>
-      <button class="btn ghost" data-feed>Voir tout le calendrier ${esc(e.feed.name)}</button>
+      ${e.feed.url ? `<button class="btn ghost" data-feed>Voir tout le calendrier ${esc(e.feed.name)}</button>` : ''}
     </div>`, (sh) => {
     sh.querySelector('[data-close]').onclick = closeSheet;
     sh.querySelector('[data-add]').onclick = () => addSuggested(e, cat);
-    sh.querySelector('[data-feed]').onclick = () => openSuggFeed(e.feed.url);
+    const fb = sh.querySelector('[data-feed]'); if (fb) fb.onclick = () => openSuggFeed(e.feed.url);
   });
 }
 
@@ -589,24 +591,31 @@ function viewSources() {
   // Suggestions : de vrais événements à venir, à ajouter un par un ; le calendrier complet en second
   const have = (u) => srcs.some((x) => sameFeed(x.url, u));
   const inAgenda = new Set(allEvents().map((e) => `${e.title.toLowerCase().trim()}|${e.start.slice(0, 16)}`));
-  const groups = SUGGESTIONS.map((g) => ({ ...g, items: g.items.filter((it) => !have(it.url)) })).filter((g) => g.items.length);
+  const groups = SUGGESTIONS.map((g) => ({ ...g, items: g.items.filter((it) => !have(it.url)) }));
   if (groups.length) {
     html += `<div class="section-title">Suggestions</div>`;
     S.suggShown = {};
     for (const g of groups) {
       const c = catById(suggCat(g.cat));
       const seen = new Set();
-      const evs = g.items.flatMap((it) => suggEvents(it) || [])
+      const picks = g.picks && S.remote?.suggestions?.picks?.[g.picks];
+      const now = Date.now();
+      const raw = picks
+        ? picks.map((e) => ({ ...frenchify(e), feed: { name: g.credit || g.group, label: g.label, site: e.url, credit: true }, sid: `${e.uid}@pick` })).filter((e) => evEndMs(e) > now)
+        : g.items.flatMap((it) => suggEvents(it) || []);
+      const evs = raw
         .filter((e) => { const k = `${e.title.toLowerCase().trim()}|${e.start.slice(0, 16)}`; if (seen.has(k) || inAgenda.has(k)) return false; seen.add(k); return true; })
-        .sort((x, y) => startMs(x) - startMs(y)).slice(0, 5);
+        .sort((x, y) => startMs(x) - startMs(y)).slice(0, picks ? 10 : 5);
+      if (!evs.length && !g.items.length) continue;
       evs.forEach((e) => { S.suggShown[e.sid] = { ev: e, cat: g.cat }; });
-      const loading = g.items.some((it) => suggLive[it.url] === 'loading' && !S.remote?.suggestions?.feeds?.[it.url]);
+      const loading = !picks && g.items.some((it) => suggLive[it.url] === 'loading' && !S.remote?.suggestions?.feeds?.[it.url]);
+      const extra = (e) => (e.feed.credit ? (e.platform || (g.picks === 'films' ? (/en France/.test(e.notes || '') ? 'au cinéma' : 'sortie US') : '')) : e.feed.name);
       html += `<div class="sugg-group">${esc(g.group)}</div><div class="card">${evs.map((e) => `
         <div class="row"><span class="dot" style="background:${esc(c ? c.color : 'var(--faint)')};width:10px;height:10px"></span>
-          <button class="grow plain" data-sugg-ev="${esc(e.sid)}"><div class="name">${esc(e.title)}</div><div class="info">${esc(suggWhen(e))} · ${esc(e.feed.name)}</div></button>
+          <button class="grow plain" data-sugg-ev="${esc(e.sid)}"><div class="name">${esc(e.title)}</div><div class="info">${esc([suggWhen(e), extra(e)].filter(Boolean).join(' · '))}</div></button>
           <button class="iconbtn sm" data-sugg-add="${esc(e.sid)}" aria-label="Ajouter ${esc(e.title)}" title="Ajouter à mon agenda"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button></div>`).join('')
         || `<div class="row"><div class="grow"><div class="info">${loading ? 'Recherche des prochains événements…' : 'Prochains événements disponibles après la prochaine synchro.'}</div></div></div>`}
-        <div class="sugg-feeds"><span class="sugg-label">Tout le calendrier :</span>${g.items.map((it) => `<button class="chip" data-sugg-feed="${esc(it.url)}">${esc(it.name)}</button>`).join('')}</div></div>`;
+        ${g.items.length ? `<div class="sugg-feeds"><span class="sugg-label">Tout le calendrier :</span>${g.items.map((it) => `<button class="chip" data-sugg-feed="${esc(it.url)}">${esc(it.name)}</button>`).join('')}</div>` : ''}</div>`;
     }
   }
   return html;

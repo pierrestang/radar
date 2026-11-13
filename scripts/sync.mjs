@@ -7,7 +7,8 @@ import { parseICS, buildICS, normalizeUrl, emptyConfig, emptyRemote, googlePaylo
 import { findGist, readGist, writeGist } from '../shared/gist.js';
 import { TV_PAGES, TV_REFRESH_MS, parseFootao, annotateTv } from '../shared/tv.js';
 import { MUSIC_SOURCE_ID, musicReleases } from '../shared/itunes.js';
-import { SUGGESTIONS, SUGGESTIONS_REFRESH_MS, previewEvents } from '../shared/suggestions.js';
+import { SUGGESTIONS, SUGGESTIONS_REFRESH_MS, TRENDING_REFRESH_MS, previewEvents } from '../shared/suggestions.js';
+import { trendingFilms, trendingSeries, footballPicks } from './trending.mjs';
 
 const UA = { 'User-Agent': 'Radar-calendar-sync/1.0' };
 
@@ -85,22 +86,43 @@ if (next.tv) {
   console.log(`📺 ${n} matchs avec leur chaîne`);
 }
 
-// Prochains événements des calendriers suggérés (onglet Sources), relus toutes les 6 h.
+// Suggestions de l'onglet Sources : aperçu des calendriers (toutes les 6 h) et sélections « à ne pas manquer ».
 next.suggestions = remote.suggestions || null;
+const sugg = next.suggestions ? { ...next.suggestions, picks: { ...(next.suggestions.picks || {}) } } : { feeds: {}, picks: {} };
 if (!next.suggestions || Date.now() - Date.parse(next.suggestions.fetchedAt || 0) > SUGGESTIONS_REFRESH_MS) {
-  const feeds = { ...(next.suggestions?.feeds || {}) };
+  const feeds = {}, club = [];
   let n = 0;
   for (const g of SUGGESTIONS) for (const it of g.items) {
     try {
       const res = await fetch(it.url, { headers: { ...UA, Accept: 'text/calendar, */*' }, signal: AbortSignal.timeout(30000) });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      feeds[it.url] = { fetchedAt: new Date().toISOString(), events: previewEvents(parseICS(await res.text(), ICAL).events) };
+      const p = parseICS(await res.text(), ICAL);
+      feeds[it.url] = { fetchedAt: new Date().toISOString(), events: previewEvents(p.events) };
+      if (g.picks === 'football') club.push({ teamName: (p.calName || '').replace(/\s*-\s*Fixtures$/i, ''), events: p.events, star: it.star });
+      if (g.picks === 'films') sugg.filmFeed = p.events;
       n++;
-    } catch (err) { console.log(`✗ suggestion : ${err.message || err}`); }
+    } catch (err) { if (sugg.feeds?.[it.url]) feeds[it.url] = sugg.feeds[it.url]; console.log(`✗ suggestion : ${err.message || err}`); }
+    await new Promise((r) => setTimeout(r, 300));
   }
-  next.suggestions = { fetchedAt: new Date().toISOString(), feeds };
-  console.log(`💡 suggestions : ${n} calendriers relus`);
+  sugg.feeds = feeds; sugg.fetchedAt = new Date().toISOString();
+  if (club.length) sugg.picks.football = footballPicks(club).map(({ uid, title, start, end, allDay, location, url }) => ({ uid, title, start, end, allDay, location, url }));
+  console.log(`💡 suggestions : ${n} calendriers relus, ${sugg.picks.football?.length || 0} affiches`);
 }
+if (!sugg.trendingAt || Date.now() - Date.parse(sugg.trendingAt) > TRENDING_REFRESH_MS) {
+  try {
+    if (!sugg.filmFeed) {
+      const it = SUGGESTIONS.find((g) => g.picks === 'films').items[0];
+      const res = await fetch(it.url, { headers: { ...UA, Accept: 'text/calendar, */*' }, signal: AbortSignal.timeout(30000) });
+      if (res.ok) sugg.filmFeed = parseICS(await res.text(), ICAL).events;
+    }
+    if (sugg.filmFeed) sugg.picks.films = await trendingFilms(sugg.filmFeed);
+    sugg.picks.series = await trendingSeries();
+    sugg.trendingAt = new Date().toISOString();
+    console.log(`🎬 plus attendus : ${sugg.picks.films?.length || 0} films, ${sugg.picks.series?.length || 0} séries`);
+  } catch (err) { console.log(`✗ plus attendus : ${err.message || err}`); }
+}
+delete sugg.filmFeed;
+next.suggestions = sugg;
 
 // Relire la config juste avant d'écrire, au cas où elle aurait changé pendant la synchro.
 const fresh = (await readGist(token, id)).config || config;

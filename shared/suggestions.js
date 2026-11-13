@@ -3,25 +3,38 @@ import { startMs } from './ics.js';
 // Calendriers gratuits vérifiés (recherche du 12/11/2026). La synchro en lit les prochains événements
 // (remote.suggestions) pour que l'app propose des événements précis, et pas seulement des catalogues.
 
+const club = (name, slug, star = false) => ({ name, url: `https://matchcalendar.football/team/${slug}/${slug}.ics`, site: `https://matchcalendar.football/team/${slug}/`, star });
+
+// picks : sélection calculée par la synchro (remote.suggestions.picks[clé]) ; items : calendriers complets à suivre.
 export const SUGGESTIONS = [
-  { group: 'Football', cat: 'sport', items: [
-    { name: 'OM', url: 'https://matchcalendar.football/team/marseille/marseille.ics', site: 'https://matchcalendar.football/team/marseille/' },
-    { name: 'Ligue des champions', url: 'https://matchcalendar.football/competition/champions-league/champions-league.ics', site: 'https://matchcalendar.football/competition/champions-league/' },
-    { name: 'Équipe de France', url: 'https://matchcalendar.football/team/france/france.ics', site: 'https://matchcalendar.football/team/france/' },
-    { name: 'Real Madrid', url: 'https://matchcalendar.football/team/real-madrid/real-madrid.ics', site: 'https://matchcalendar.football/team/real-madrid/' },
+  // Foot : affiches entre ces clubs (France, Italie, Allemagne, Espagne, Angleterre) + tous les matchs de l'Inter Miami.
+  { group: 'Football', cat: 'sport', picks: 'football', label: 'Les grandes affiches', credit: 'matchcalendar.football', items: [
+    club('PSG', 'paris-saint-germain'),
+    club('OM', 'marseille'),
+    club('Inter Milan', 'inter'),
+    club('Juventus', 'juventus'),
+    club('AC Milan', 'milan'),
+    club('Bayern Munich', 'bayern-munchen'),
+    club('Dortmund', 'borussia-dortmund'),
+    club('Real Madrid', 'real-madrid'),
+    club('Atlético Madrid', 'atletico-madrid'),
+    club('FC Barcelone', 'barcelona'),
+    club('Arsenal', 'arsenal'),
+    club('Chelsea', 'chelsea'),
+    club('Liverpool', 'liverpool'),
+    club('Manchester City', 'manchester-city'),
+    club('Inter Miami', 'inter-miami', true),
   ] },
-  { group: 'Séries', cat: 'serie', items: [
-    { name: 'Netflix', url: 'https://www.smartcalendars.ai/cal/4fc097ff8c48803f38c6272953b5c349e4669652cc4686e154ecc61a7b7d968f.ics', site: 'https://www.smartcalendars.ai/' },
-    { name: 'Prime Video', url: 'https://www.smartcalendars.ai/cal/a1d170b8827c245b4bf4391c83e3551a797f91537c3d9a0f291efbd6bdde4d29.ics', site: 'https://www.smartcalendars.ai/' },
-    { name: 'Disney+', url: 'https://www.smartcalendars.ai/cal/53757181785a61d01d52b99de46f6e975311dd558adf00e3828a01756c08a1b5.ics', site: 'https://www.smartcalendars.ai/' },
-    { name: 'Apple TV+', url: 'https://www.smartcalendars.ai/cal/e93ddfee3629f75f5eec91218b5b42027335911a7d42b820b8d5c82ad1081bdf.ics', site: 'https://www.smartcalendars.ai/' },
-  ] },
-  { group: 'Films', cat: 'film', items: [
-    { name: 'Films les plus attendus', url: 'https://www.smartcalendars.ai/cal/1d98bae7fac4944084f941ee1e715ec74b994c71e7c596ec01b38b61d37a9067.ics', site: 'https://www.smartcalendars.ai/' },
+  // Séries : premières de saison les plus attendues (TVmaze + vues Wikipédia), une entrée par saison.
+  { group: 'Séries', cat: 'serie', picks: 'series', label: 'Les plus attendues', credit: 'TVmaze · Wikipédia', items: [] },
+  // Films : grosses sorties classées par attente (vues Wikipédia), date française si connue (Wikidata).
+  { group: 'Films', cat: 'film', picks: 'films', label: 'Les plus attendus', credit: 'Wikidata · Wikipédia', items: [
+    { name: 'Grosses sorties cinéma', url: 'https://www.smartcalendars.ai/cal/1d98bae7fac4944084f941ee1e715ec74b994c71e7c596ec01b38b61d37a9067.ics', site: 'https://www.smartcalendars.ai/' },
   ] },
 ];
 
 export const SUGGESTIONS_REFRESH_MS = 6 * 3600e3;
+export const TRENDING_REFRESH_MS = 24 * 3600e3;
 export const PREVIEW_COUNT = 15;
 
 /** Prochains événements d'un flux suggéré, allégés pour remote.json. */

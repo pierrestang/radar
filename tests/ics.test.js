@@ -155,3 +155,16 @@ test('sorties musicales (iTunes) : dates de France, doublons retirés', async ()
   assert.equal(evs.length, 1);
   assert.deepEqual([evs[0].title, evs[0].start, evs[0].end, evs[0].platform], ['SDM — IN INFINITUM', '2026-11-13', '2026-11-14', 'Apple Music']);
 });
+
+test('suggestions foot : affiches entre clubs suivis et matchs vedettes, espacés', async () => {
+  const { footballPicks } = await import('../scripts/trending.mjs');
+  const d = (n) => new Date(Date.now() + n * 864e5).toISOString();
+  const feeds = [
+    { teamName: 'Arsenal', events: [{ title: 'Arsenal v Chelsea', start: d(3) }, { title: 'Arsenal v Burnley', start: d(10) }, { title: 'Liverpool v Arsenal', start: d(5) }] },
+    { teamName: 'Chelsea', events: [{ title: 'Arsenal v Chelsea', start: d(3) }] },
+    { teamName: 'Liverpool', events: [{ title: 'Liverpool v Arsenal', start: d(5) }, { title: 'Liverpool v Chelsea', start: d(20) }] },
+    { teamName: 'Inter Miami', star: true, events: [{ title: 'Inter Miami v Orlando', start: d(30) }] },
+  ];
+  const t = footballPicks(feeds, { minGapDays: 4 }).map((e) => e.title);
+  assert.deepEqual(t, ['Arsenal v Chelsea', 'Liverpool v Chelsea', 'Inter Miami v Orlando']);
+});
