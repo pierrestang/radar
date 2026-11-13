@@ -124,24 +124,31 @@ function applyLabels_(cal, events, from, to) {
     labels.push(l); byHex[x.hex] = l.id; changed = true;
   });
   if (changed) api_('patch', calUrl, { labelProperties: { eventLabels: labels } });
-  const reqs = [], evs = [];
-  cal.getEvents(from, to).forEach(function (ev) {
-    const x = wanted[ev.getTag('radarUid')];
-    if (!x) return;
-    const id = byHex[x.hex];
-    if (ev.getTag('radarLabel') === id) return;
-    reqs.push({
-      url: calUrl + '/events/' + encodeURIComponent(ev.getId().split('@')[0]) + '?eventLabelVersion=1',
-      method: 'patch', muteHttpExceptions: true, contentType: 'application/json',
-      headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, payload: JSON.stringify({ eventLabelId: id }),
+  // Étiquette réelle de chaque événement lue par l'API (ne pas réécrire l'événement via CalendarApp ensuite :
+  // il renverrait l'ancien colorId et Google recalerait l'étiquette dessus).
+  const reqs = [];
+  let page = null;
+  do {
+    const q = calUrl + '/events?eventLabelVersion=1&singleEvents=true&maxResults=2500&timeMin=' + encodeURIComponent(from.toISOString())
+      + '&timeMax=' + encodeURIComponent(to.toISOString()) + (page ? '&pageToken=' + encodeURIComponent(page) : '');
+    const list = api_('get', q);
+    (list.items || []).forEach(function (e) {
+      const xp = e.extendedProperties || {}; // les tags CalendarApp sont en propriétés partagées
+      const x = wanted[(xp.shared || {}).radarUid || (xp.private || {}).radarUid];
+      if (!x || e.eventLabelId === byHex[x.hex]) return;
+      reqs.push({
+        url: calUrl + '/events/' + encodeURIComponent(e.id) + '?eventLabelVersion=1',
+        method: 'patch', muteHttpExceptions: true, contentType: 'application/json',
+        headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, payload: JSON.stringify({ eventLabelId: byHex[x.hex] }),
+      });
     });
-    evs.push([ev, id]);
-  });
+    page = list.nextPageToken;
+  } while (page);
   let n = 0, err = null;
   for (let i = 0; i < reqs.length; i += 10) {
     if (i) Utilities.sleep(1000); // limite de débit de l'API Agenda
-    UrlFetchApp.fetchAll(reqs.slice(i, i + 10)).forEach(function (res, k) {
-      if (res.getResponseCode() < 300) { evs[i + k][0].setTag('radarLabel', evs[i + k][1]); n++; }
+    UrlFetchApp.fetchAll(reqs.slice(i, i + 10)).forEach(function (res) {
+      if (res.getResponseCode() < 300) n++;
       else if (!err) err = 'PATCH ' + res.getResponseCode() + ' ' + res.getContentText().slice(0, 200);
     });
   }
