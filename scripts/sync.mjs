@@ -89,7 +89,10 @@ if (next.tv) {
 // Suggestions de l'onglet Sources : aperçu des calendriers (toutes les 6 h) et sélections « à ne pas manquer ».
 next.suggestions = remote.suggestions || null;
 const sugg = next.suggestions ? { ...next.suggestions, picks: { ...(next.suggestions.picks || {}) } } : { feeds: {}, picks: {} };
-if (!next.suggestions || Date.now() - Date.parse(next.suggestions.fetchedAt || 0) > SUGGESTIONS_REFRESH_MS) {
+const suggUrls = SUGGESTIONS.flatMap((g) => g.items.map((it) => it.url));
+const suggStale = !next.suggestions || Date.now() - Date.parse(next.suggestions.fetchedAt || 0) > SUGGESTIONS_REFRESH_MS
+  || !sugg.picks.football || suggUrls.some((u) => !sugg.feeds?.[u]); // liste de calendriers modifiée
+if (suggStale) {
   const feeds = {}, club = [];
   let n = 0;
   for (const g of SUGGESTIONS) for (const it of g.items) {
